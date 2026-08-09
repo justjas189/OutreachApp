@@ -29,7 +29,7 @@ export default async function DashboardPage() {
           <p className="mono text-xs font-bold uppercase tracking-[0.18em] text-[#527184]">Operations overview</p>
           <h1 className="mt-2 text-4xl font-[800] tracking-[-0.045em]">Recipient intake, at a glance.</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#526873]">
-            Phases 1–3 cover secure admin access, campaign storage, and private Google Sheet imports.
+            Secure intake, connected senders, deterministic templates, and approval-ready email previews.
           </p>
         </div>
         <Link className="button-primary" href="/campaigns/new">
@@ -76,12 +76,13 @@ export default async function DashboardPage() {
 
         <article className="panel p-6 sm:p-7">
           <p className="mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#607580]">Current boundary</p>
-          <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">No Gmail operations.</h2>
+          <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Preview mode stays non-sending.</h2>
           <ul className="mt-5 space-y-3 text-sm text-[#526873]">
             <li className="flex gap-3"><span className="font-black text-[#2563a6]">✓</span> Admin auth and RLS active</li>
             <li className="flex gap-3"><span className="font-black text-[#2563a6]">✓</span> Sheet preview before commit</li>
             <li className="flex gap-3"><span className="font-black text-[#2563a6]">✓</span> Duplicate recipients blocked</li>
-            <li className="flex gap-3"><span className="font-black text-[#ed7b3a]">—</span> Gmail OAuth deferred to Phase 4</li>
+            <li className="flex gap-3"><span className="font-black text-[#2563a6]">✓</span> Gmail OAuth connection only</li>
+            <li className="flex gap-3"><span className="font-black text-[#ed7b3a]">—</span> Gmail draft/send deferred to Phase 7</li>
           </ul>
         </article>
       </section>

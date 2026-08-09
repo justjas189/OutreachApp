@@ -1,6 +1,6 @@
-# Supabase setup — Phases 1–3
+# Supabase setup — Phases 1–6
 
-This app uses Supabase Auth for admins and Postgres RLS for every exposed table. No service-role key is used by the Phase 1–3 application.
+This app uses Supabase Auth for admins and Postgres RLS for every exposed table. Phase 4 adds a server-only service-role client for unauthenticated sender invitation/OAuth callbacks. It can call only explicitly granted connection RPCs and must never reach browser code.
 
 ## 1. Create and link a project
 
@@ -11,6 +11,7 @@ This app uses Supabase Auth for admins and Postgres RLS for every exposed table.
    ```dotenv
    NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
    ```
 
 4. Authenticate and link the pinned project CLI:
@@ -61,7 +62,9 @@ Authorization must remain in `raw_app_meta_data` / `app_metadata`. Never put rol
 - `anon` receives no table grants.
 - `authenticated` receives explicit table grants, then RLS permits only JWTs with `app_metadata.role = admin`.
 - All public tables have RLS enabled.
-- Future Gmail refresh tokens and invite token hashes live in the unexposed `private` schema. Phases 1–3 do not write them.
+- Invite token hashes, encrypted Gmail refresh tokens, and hashed OAuth states live in the unexposed `private` schema.
+- Sender connection RPCs are granted only to `service_role`; admin workflow RPCs validate immutable `app_metadata.role = admin` and run through authenticated server actions.
+- Sender Gmail accounts are not Supabase users and receive no authenticated database session.
 - `create_campaign_with_recipients` is `SECURITY INVOKER`; it uses the caller's RLS permissions and commits campaign plus recipients atomically.
 - `recipients` has a unique constraint on `(campaign_id, email)`.
 

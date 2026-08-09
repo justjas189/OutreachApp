@@ -144,5 +144,5 @@ export async function commitCampaignAction(
 
   revalidatePath("/dashboard");
   revalidatePath("/campaigns");
-  redirect(`/campaigns?imported=${campaignId}`);
+  redirect(`/campaigns/${campaignId}?notice=imported`);
 }

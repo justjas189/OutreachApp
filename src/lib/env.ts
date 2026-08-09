@@ -10,6 +10,18 @@ const googleServiceAccountSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().min(40),
 });
 
+const serverSupabaseSchema = z.object({
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
+});
+
+const googleOAuthSchema = z.object({
+  GOOGLE_CLIENT_ID: z.string().min(20),
+  GOOGLE_CLIENT_SECRET: z.string().min(10),
+  GOOGLE_OAUTH_REDIRECT_URI: z.url(),
+});
+
+const appUrlSchema = z.url();
+
 export type EmailMode = "preview" | "draft" | "live";
 
 export function getSupabaseConfig() {
@@ -40,6 +52,42 @@ export function getGoogleServiceAccountConfig() {
     email: parsed.data.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     privateKey: parsed.data.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, "\n"),
   };
+}
+
+export function getSupabaseServiceRoleKey(): string {
+  const parsed = serverSupabaseSchema.safeParse(process.env);
+
+  if (!parsed.success) {
+    throw new Error("Server Supabase configuration is incomplete. Configure SUPABASE_SERVICE_ROLE_KEY.");
+  }
+
+  return parsed.data.SUPABASE_SERVICE_ROLE_KEY;
+}
+
+export function getGoogleOAuthConfig() {
+  const parsed = googleOAuthSchema.safeParse(process.env);
+
+  if (!parsed.success) {
+    throw new Error(
+      "Google OAuth configuration is incomplete. Configure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_OAUTH_REDIRECT_URI.",
+    );
+  }
+
+  return {
+    clientId: parsed.data.GOOGLE_CLIENT_ID,
+    clientSecret: parsed.data.GOOGLE_CLIENT_SECRET,
+    redirectUri: parsed.data.GOOGLE_OAUTH_REDIRECT_URI,
+  };
+}
+
+export function getAppUrl(): string {
+  const parsed = appUrlSchema.safeParse(process.env.APP_URL);
+
+  if (!parsed.success) {
+    throw new Error("Application URL is incomplete. Configure APP_URL.");
+  }
+
+  return parsed.data.replace(/\/$/, "");
 }
 
 export function parseEmailMode(value: string | undefined): EmailMode {

@@ -11,7 +11,7 @@ insert into public.templates (
   'brides, wedding parties, and event attendees',
   'bridal makeup, special events, and professional beauty services',
   'Can {{NAME}} Be Featured in {{CITY}}''s {{GUIDE_TITLE}} Guide?',
-  'Hi {{NAME}} Team,\n\nThis is safe local demo content. No email is sent by Phases 1–3.\n\nReference: {{LINK}}'
+  'Hi {{NAME}} Team,\n\nThis is safe local preview content. No Gmail draft is created and no email is sent.\n\nReference: {{LINK}}'
 )
 on conflict (business_type) do nothing;
 

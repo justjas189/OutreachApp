@@ -5,11 +5,16 @@ import { notFound } from "next/navigation";
 import { getPagination } from "@/lib/pagination";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import {
+  assignCampaignSendersAction,
+  generateCampaignPreviewsAction,
+} from "./actions";
+
 export const metadata: Metadata = { title: "Campaign details" };
 
 type CampaignDetailPageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ page?: string | string[] }>;
+  searchParams: Promise<{ page?: string | string[]; notice?: string | string[] }>;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,7 +39,14 @@ export default async function CampaignDetailPage({
   }
 
   const supabase = await createSupabaseServerClient();
-  const [campaignResult, countResult] = await Promise.all([
+  const [
+    campaignResult,
+    countResult,
+    connectedSenderResult,
+    draftCountResult,
+    generatedCountResult,
+    approvedCountResult,
+  ] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id,name,city,status,created_at,google_sheet_id,worksheet_name")
@@ -44,9 +56,35 @@ export default async function CampaignDetailPage({
       .from("recipients")
       .select("id", { count: "exact", head: true })
       .eq("campaign_id", id),
+    supabase
+      .from("sender_accounts")
+      .select("id,display_name,email,status")
+      .eq("status", "CONNECTED")
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("email_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", id),
+    supabase
+      .from("email_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", id)
+      .eq("status", "GENERATED"),
+    supabase
+      .from("email_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", id)
+      .eq("status", "APPROVED"),
   ]);
 
-  if (campaignResult.error || countResult.error) {
+  if (
+    campaignResult.error ||
+    countResult.error ||
+    connectedSenderResult.error ||
+    draftCountResult.error ||
+    generatedCountResult.error ||
+    approvedCountResult.error
+  ) {
     throw new Error("Campaign details could not be loaded from Supabase.");
   }
 
@@ -76,6 +114,16 @@ export default async function CampaignDetailPage({
   const sheetUrl = campaign.google_sheet_id
     ? `https://docs.google.com/spreadsheets/d/${campaign.google_sheet_id}`
     : null;
+  const notice = Array.isArray(query.notice) ? query.notice[0] : query.notice;
+  const noticeMessages: Record<string, { tone: string; message: string }> = {
+    imported: { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign imported. Select connected senders for balanced assignment." },
+    assigned: { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Recipients assigned evenly across selected connected senders." },
+    "assignment-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Sender assignment failed. Assignment locks after previews exist." },
+    "sender-required": { tone: "border-red-200 bg-red-50 text-red-800", message: "Assign every recipient to connected senders before generation." },
+    "template-required": { tone: "border-red-200 bg-red-50 text-red-800", message: "Create a template for every recipient Business Type before generation." },
+    "generation-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Email previews could not be generated. No Gmail operation occurred." },
+  };
+  const currentNotice = notice ? noticeMessages[notice] : undefined;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -124,6 +172,53 @@ export default async function CampaignDetailPage({
         <article className="panel p-5">
           <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Worksheet</p>
           <p className="mono mt-2 truncate text-sm font-bold">{campaign.worksheet_name ?? "Not recorded"}</p>
+        </article>
+      </section>
+
+      {currentNotice ? (
+        <p className={`mt-5 rounded-lg border px-4 py-3 text-sm font-bold ${currentNotice.tone}`} role="status">
+          {currentNotice.message}
+        </p>
+      ) : null}
+
+      <section className="mt-8 grid gap-5 lg:grid-cols-2">
+        <article className="panel p-6">
+          <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Sender assignment</p>
+          <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Balance connected senders</h2>
+          {(draftCountResult.count ?? 0) > 0 ? (
+            <p className="mt-3 text-sm text-[#607580]">Assignment locked because stored previews already exist.</p>
+          ) : connectedSenderResult.data?.length ? (
+            <form action={assignCampaignSendersAction} className="mt-5 space-y-3">
+              <input name="campaignId" type="hidden" value={id} />
+              {connectedSenderResult.data.map((sender) => (
+                <label className="flex items-center gap-3 rounded-lg border border-[#d4ddd9] px-4 py-3 text-sm" key={sender.id}>
+                  <input defaultChecked name="senderId" type="checkbox" value={sender.id} />
+                  <span><strong>{sender.display_name}</strong><span className="mono ml-2 text-xs text-[#607580]">{sender.email}</span></span>
+                </label>
+              ))}
+              <button className="button-primary" type="submit">Assign evenly</button>
+            </form>
+          ) : (
+            <p className="mt-4 text-sm text-[#607580]">No connected senders. <Link className="font-bold text-[#2563a6]" href="/senders">Create sender invite →</Link></p>
+          )}
+        </article>
+
+        <article className="panel p-6">
+          <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Email workflow</p>
+          <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Generate stored previews</h2>
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            {[["Stored", draftCountResult.count ?? 0], ["Generated", generatedCountResult.count ?? 0], ["Approved", approvedCountResult.count ?? 0]].map(([label, value]) => (
+              <div className="rounded-lg bg-[#eef4f7] p-3" key={label}><p className="mono text-[0.6rem] uppercase text-[#607580]">{label}</p><p className="mt-1 text-xl font-extrabold">{value}</p></div>
+            ))}
+          </div>
+          <p className="mt-4 text-xs leading-5 text-[#607580]">Generation uses deterministic templates and stores database previews only. It never creates Gmail drafts or sends mail.</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <form action={generateCampaignPreviewsAction}>
+              <input name="campaignId" type="hidden" value={id} />
+              <button className="button-primary" type="submit">Generate previews</button>
+            </form>
+            <Link className="rounded-md border border-[#c8d4d0] px-4 py-2 text-sm font-bold" href={`/campaigns/${id}/emails`}>Review emails</Link>
+          </div>
         </article>
       </section>
 
