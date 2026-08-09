@@ -16,6 +16,7 @@ const navigation = [
   { href: "/campaigns/new", label: "Import recipients" },
   { href: "/templates", label: "Templates" },
   { href: "/senders", label: "Senders" },
+  { href: "/suppression", label: "Suppression" },
 ];
 
 export function AdminShell({ adminEmail, emailMode, children }: AdminShellProps) {

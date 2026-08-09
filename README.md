@@ -1,6 +1,6 @@
 # Rip City Outreach
 
-Production-minded Phase 1–6 outreach dashboard. Stack: Next.js App Router, TypeScript, Tailwind CSS, Supabase Auth/Postgres/RLS, Google Sheets API, Google OAuth, and Vitest.
+Production-minded Phase 1–8 outreach dashboard. Stack: Next.js App Router, TypeScript, Tailwind CSS, Supabase Auth/Postgres/RLS, Google Sheets API, Gmail API/Google OAuth, and Vitest.
 
 Implemented scope:
 
@@ -15,8 +15,13 @@ Implemented scope:
 - connected-sender-only balanced campaign assignment
 - editable Business Type templates with validated variables
 - stored email preview generation, editing, regeneration, and `GENERATED → APPROVED` workflow
+- explicit UTC/IANA-timezone campaign scheduling with send-now, future edit/cancel, pause, and resume
+- database queue with unique enqueue keys, atomic `SKIP LOCKED` claims, capped retries, and safe logs
+- preview/draft/live enforcement, per-sender batches, and optional recipient allowlist
+- Gmail draft creation in draft mode and approved/queued sending in live mode
+- manual suppression management with generation/enqueue/pre-operation checks
 
-Not implemented: Gmail draft creation, Gmail sending, queue workers, or suppression UI. Those belong to later phases. Phases 4–6 never create drafts or send email.
+Not implemented: Gmail inbox reading, automatic STOP detection, analytics/reporting expansion, or Phase 9–10 deployment documentation.
 
 ## Run locally
 
@@ -46,4 +51,4 @@ npm run test:run
 npm run build
 ```
 
-`EMAIL_MODE` defaults to `preview`. Phases 4–6 use Gmail authorization/profile verification only; no Gmail draft or send endpoint is implemented.
+`EMAIL_MODE` defaults to `preview`. The protected queue endpoint is `/api/cron/process-email-queue`; `vercel.json` invokes it every five minutes in production.

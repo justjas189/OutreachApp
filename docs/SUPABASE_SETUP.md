@@ -1,4 +1,4 @@
-# Supabase setup — Phases 1–6
+# Supabase setup — Phases 1–8
 
 This app uses Supabase Auth for admins and Postgres RLS for every exposed table. Phase 4 adds a server-only service-role client for unauthenticated sender invitation/OAuth callbacks. It can call only explicitly granted connection RPCs and must never reach browser code.
 
@@ -67,6 +67,9 @@ Authorization must remain in `raw_app_meta_data` / `app_metadata`. Never put rol
 - Sender Gmail accounts are not Supabase users and receive no authenticated database session.
 - `create_campaign_with_recipients` is `SECURITY INVOKER`; it uses the caller's RLS permissions and commits campaign plus recipients atomically.
 - `recipients` has a unique constraint on `(campaign_id, email)`.
+- `email_queue.email_draft_id` is unique. Service-role-only queue RPCs use `FOR UPDATE SKIP LOCKED` and claim tokens; admins receive RLS-protected read access only.
+- Scheduled instants are stored as `timestamptz` (UTC) with the chosen IANA timezone stored separately.
+- Apply `20260809090305_phases_7_8.sql` before enabling the cron worker.
 
 ## 5. Optional local Supabase
 

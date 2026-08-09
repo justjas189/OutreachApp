@@ -98,3 +98,32 @@ export function parseEmailMode(value: string | undefined): EmailMode {
 export function getEmailMode(): EmailMode {
   return parseEmailMode(process.env.EMAIL_MODE);
 }
+
+export function parseEmailBatchSize(value: string | undefined): number {
+  const parsed = z.coerce.number().int().min(1).max(50).safeParse(value ?? "5");
+  return parsed.success ? parsed.data : 5;
+}
+
+export function getEmailBatchSize(): number {
+  return parseEmailBatchSize(process.env.EMAIL_BATCH_SIZE);
+}
+
+export function parseTestRecipientAllowlist(value: string | undefined): Set<string> | null {
+  if (!value?.trim()) return null;
+  const entries = value.split(",").map((entry) => entry.trim().toLowerCase()).filter(Boolean);
+  const parsed = z.array(z.email()).min(1).safeParse(entries);
+  if (!parsed.success) {
+    throw new Error("TEST_RECIPIENT_ALLOWLIST contains an invalid email address.");
+  }
+  return new Set(parsed.data);
+}
+
+export function getTestRecipientAllowlist(): Set<string> | null {
+  return parseTestRecipientAllowlist(process.env.TEST_RECIPIENT_ALLOWLIST);
+}
+
+export function getCronSecret(): string {
+  const parsed = z.string().min(32).safeParse(process.env.CRON_SECRET);
+  if (!parsed.success) throw new Error("Queue worker protection is incomplete. Configure CRON_SECRET.");
+  return parsed.data;
+}

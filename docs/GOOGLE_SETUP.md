@@ -1,4 +1,4 @@
-# Google Sheets and Gmail OAuth setup — Phases 3–6
+# Google Sheets and Gmail OAuth setup — Phases 3–8
 
 Google Sheets uses a dedicated service account. Gmail sender accounts use separate per-user OAuth authorization. Sender accounts must never receive Google Sheet, dashboard, campaign, recipient, template, database, or source-code access.
 
@@ -102,4 +102,4 @@ Store output as server-only `TOKEN_ENCRYPTION_KEY`. Never rotate it without firs
 4. Sender selects **Connect Gmail**, completes Google consent, and sees generic success page.
 5. Confirm dashboard shows sender as `CONNECTED`.
 
-Flow uses expiring one-time invitation tokens, hashed OAuth state, an HttpOnly SameSite cookie, PKCE, verified Google ID token, and AES-256-GCM encrypted refresh-token storage. Access and refresh tokens are never returned to browser or logged. Phases 4–6 do not create Gmail drafts and do not send email.
+Flow uses expiring one-time invitation tokens, hashed OAuth state, an HttpOnly SameSite cookie, PKCE, verified Google ID token, and AES-256-GCM encrypted refresh-token storage. Access and refresh tokens are never returned to browser or logged. Phase 7 uses the same `gmail.compose` authorization server-side: `draft` creates Gmail drafts only, `live` sends eligible queue items, and `preview` calls neither operation.

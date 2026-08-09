@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/admin";
 import { generateRecipientPreview, normalizeBusinessType } from "@/lib/email-previews/generator";
+import { localDateTimeToUtc } from "@/lib/scheduling/timezone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
 
@@ -16,6 +17,15 @@ const emailContentSchema = z.object({
   subject: z.string().trim().min(1).max(200).refine((value) => !/[\r\n]/.test(value)),
   body: z.string().min(1).max(50000),
 });
+const scheduleSchema = z.discriminatedUnion("scheduleMode", [
+  z.object({ scheduleMode: z.literal("now"), campaignId: z.uuid(), timezone: z.string().trim().min(1).max(100) }),
+  z.object({
+    scheduleMode: z.literal("later"),
+    campaignId: z.uuid(),
+    timezone: z.string().trim().min(1).max(100),
+    localDateTime: z.string().min(1),
+  }),
+]);
 
 function campaignLocation(campaignId: string, notice: string) {
   return `/campaigns/${campaignId}?notice=${notice}`;
@@ -44,6 +54,10 @@ export async function generateCampaignPreviewsAction(formData: FormData) {
   if (!campaignId.success) redirect("/campaigns");
 
   const supabase = await createSupabaseServerClient();
+  const { error: suppressionError } = await supabase.rpc("apply_campaign_suppressions", {
+    p_campaign_id: campaignId.data,
+  });
+  if (suppressionError) redirect(campaignLocation(campaignId.data, "generation-error"));
   const [campaignResult, recipientCountResult, templateResult, senderResult] = await Promise.all([
     supabase.from("campaigns").select("*").eq("id", campaignId.data).maybeSingle(),
     supabase.from("recipients").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId.data).in("status", ["PENDING", "GENERATED"]),
@@ -103,6 +117,68 @@ export async function generateCampaignPreviewsAction(formData: FormData) {
 
   revalidatePath(`/campaigns/${campaignId.data}`);
   redirect(`/campaigns/${campaignId.data}/emails?notice=generated`);
+}
+
+export async function scheduleCampaignAction(formData: FormData) {
+  await requireAdmin();
+  const parsed = scheduleSchema.safeParse({
+    scheduleMode: formData.get("scheduleMode"),
+    campaignId: formData.get("campaignId"),
+    timezone: formData.get("timezone"),
+    localDateTime: formData.get("localDateTime"),
+  });
+  if (!parsed.success) redirect("/campaigns");
+
+  let scheduledAt: Date;
+  try {
+    scheduledAt = parsed.data.scheduleMode === "now"
+      ? new Date()
+      : localDateTimeToUtc(parsed.data.localDateTime, parsed.data.timezone);
+  } catch {
+    redirect(campaignLocation(parsed.data.campaignId, "schedule-invalid"));
+  }
+  if (parsed.data.scheduleMode === "later" && scheduledAt.getTime() <= Date.now()) {
+    redirect(campaignLocation(parsed.data.campaignId, "schedule-invalid"));
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("schedule_campaign", {
+    p_campaign_id: parsed.data.campaignId,
+    p_scheduled_at: scheduledAt.toISOString(),
+    p_schedule_timezone: parsed.data.timezone,
+  });
+  revalidatePath(`/campaigns/${parsed.data.campaignId}`);
+  redirect(campaignLocation(parsed.data.campaignId, error ? "schedule-error" : "scheduled"));
+}
+
+export async function cancelCampaignScheduleAction(formData: FormData) {
+  await requireAdmin();
+  const campaignId = uuidSchema.safeParse(formData.get("campaignId"));
+  if (!campaignId.success) redirect("/campaigns");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("cancel_campaign_schedule", { p_campaign_id: campaignId.data });
+  revalidatePath(`/campaigns/${campaignId.data}`);
+  redirect(campaignLocation(campaignId.data, error || !data ? "schedule-error" : "schedule-cancelled"));
+}
+
+export async function pauseCampaignAction(formData: FormData) {
+  await requireAdmin();
+  const campaignId = uuidSchema.safeParse(formData.get("campaignId"));
+  if (!campaignId.success) redirect("/campaigns");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("pause_campaign", { p_campaign_id: campaignId.data });
+  revalidatePath(`/campaigns/${campaignId.data}`);
+  redirect(campaignLocation(campaignId.data, error || !data ? "schedule-error" : "paused"));
+}
+
+export async function resumeCampaignAction(formData: FormData) {
+  await requireAdmin();
+  const campaignId = uuidSchema.safeParse(formData.get("campaignId"));
+  if (!campaignId.success) redirect("/campaigns");
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("resume_campaign", { p_campaign_id: campaignId.data });
+  revalidatePath(`/campaigns/${campaignId.data}`);
+  redirect(campaignLocation(campaignId.data, error ? "schedule-error" : "resumed"));
 }
 
 export async function saveEmailPreviewAction(formData: FormData) {

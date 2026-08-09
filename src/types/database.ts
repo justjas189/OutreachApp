@@ -11,6 +11,9 @@ export type CampaignRow = {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  scheduled_at: string | null;
+  schedule_timezone: string | null;
+  paused_at: string | null;
 };
 
 export type RecipientRow = {
@@ -67,11 +70,39 @@ export type EmailDraftRow = {
   sender_account_id: string | null;
   subject: string;
   body: string;
-  status: "GENERATED" | "APPROVED" | "QUEUED" | "SENT" | "FAILED";
+  status: "GENERATED" | "APPROVED" | "QUEUED" | "SENT" | "FAILED" | "SUPPRESSED";
   gmail_draft_id: string | null;
   created_at: string;
   approved_at: string | null;
   sent_at: string | null;
+};
+
+export type SuppressionRow = {
+  id: string;
+  email: string;
+  reason: "STOP" | "UNSUBSCRIBED" | "INVALID" | "MANUAL BLOCK";
+  source: string;
+  created_at: string;
+};
+
+export type EmailQueueRow = {
+  id: string;
+  email_draft_id: string;
+  campaign_id: string;
+  recipient_id: string;
+  sender_account_id: string;
+  delivery_mode: "draft" | "live";
+  status: "PENDING" | "PROCESSING" | "RETRY" | "COMPLETED" | "FAILED" | "CANCELLED";
+  available_at: string;
+  attempts: number;
+  max_attempts: number;
+  claim_token: string | null;
+  claimed_at: string | null;
+  completed_at: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type TableDefinition<Row, Insert, Update> = {
@@ -129,6 +160,12 @@ export type Database = {
           >,
         Partial<EmailDraftRow>
       >;
+      suppression_list: TableDefinition<
+        SuppressionRow,
+        Partial<SuppressionRow> & Pick<SuppressionRow, "email" | "reason" | "source">,
+        Partial<SuppressionRow>
+      >;
+      email_queue: TableDefinition<EmailQueueRow, never, never>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -206,12 +243,85 @@ export type Database = {
         Args: { p_campaign_id: string };
         Returns: number;
       };
+      schedule_campaign: {
+        Args: { p_campaign_id: string; p_scheduled_at: string; p_schedule_timezone: string };
+        Returns: CampaignRow["status"];
+      };
+      cancel_campaign_schedule: {
+        Args: { p_campaign_id: string };
+        Returns: boolean;
+      };
+      pause_campaign: {
+        Args: { p_campaign_id: string };
+        Returns: boolean;
+      };
+      resume_campaign: {
+        Args: { p_campaign_id: string };
+        Returns: CampaignRow["status"];
+      };
+      apply_campaign_suppressions: {
+        Args: { p_campaign_id: string };
+        Returns: number;
+      };
+      add_suppression_entry: {
+        Args: { p_email: string; p_reason: SuppressionRow["reason"] };
+        Returns: string;
+      };
+      remove_suppression_entry: {
+        Args: { p_suppression_id: string };
+        Returns: boolean;
+      };
+      enqueue_due_campaign_emails: {
+        Args: { p_delivery_mode: EmailQueueRow["delivery_mode"] };
+        Returns: number;
+      };
+      claim_email_queue: {
+        Args: { p_delivery_mode: EmailQueueRow["delivery_mode"]; p_batch_size: number; p_claim_token: string };
+        Returns: Array<{ queue_id: string; delivery_mode: EmailQueueRow["delivery_mode"] }>;
+      };
+      prepare_claimed_email: {
+        Args: { p_queue_id: string; p_claim_token: string };
+        Returns: Array<{
+          queue_id: string;
+          delivery_mode: EmailQueueRow["delivery_mode"];
+          recipient_email: string;
+          sender_email: string;
+          subject: string;
+          body: string;
+          encrypted_refresh_token: string;
+        }>;
+      };
+      complete_email_queue_success: {
+        Args: {
+          p_queue_id: string;
+          p_claim_token: string;
+          p_provider_message_id: string;
+          p_gmail_draft_id?: string | null;
+        };
+        Returns: boolean;
+      };
+      complete_email_queue_failure: {
+        Args: {
+          p_queue_id: string;
+          p_claim_token: string;
+          p_transient: boolean;
+          p_error_code: string;
+          p_error_message: string;
+        };
+        Returns: EmailQueueRow["status"];
+      };
+      complete_finished_campaigns: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
     };
     Enums: {
       campaign_status: CampaignRow["status"];
       recipient_status: RecipientRow["status"];
       sender_status: SenderAccountRow["status"];
       draft_status: EmailDraftRow["status"];
+      email_queue_status: EmailQueueRow["status"];
+      email_delivery_mode: EmailQueueRow["delivery_mode"];
     };
     CompositeTypes: Record<string, never>;
   };
