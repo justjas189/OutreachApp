@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const runtimeMode = vi.hoisted(() => vi.fn(async () => "preview" as const));
+const runtimeMode = vi.hoisted(() => vi.fn(async (): Promise<"preview" | "draft" | "live"> => "preview"));
+const runtimeBatchSize = vi.hoisted(() => vi.fn(async () => 5));
 vi.mock("@/lib/settings/delivery-mode", () => ({ getRuntimeDeliveryMode: runtimeMode }));
+vi.mock("@/lib/settings/batch-size", () => ({ getRuntimeEmailBatchSize: runtimeBatchSize }));
 
 import type { GmailGateway } from "./gmail";
 import type { QueueRepository } from "./repository";
@@ -33,13 +35,30 @@ function dependencies(mode: "draft" | "live") {
 }
 
 describe("email queue modes", () => {
+  beforeEach(() => {
+    runtimeMode.mockReset();
+    runtimeMode.mockResolvedValue("preview");
+    runtimeBatchSize.mockReset();
+    runtimeBatchSize.mockResolvedValue(5);
+  });
+
   it("reads authoritative runtime mode when no test override is supplied", async () => {
     const { repository, gmail } = dependencies("draft");
     await processEmailQueue({ repository, gmail });
     expect(runtimeMode).toHaveBeenCalledOnce();
+    expect(runtimeBatchSize).toHaveBeenCalledOnce();
     expect(repository.enqueue).not.toHaveBeenCalled();
     expect(gmail.createDraft).not.toHaveBeenCalled();
     expect(gmail.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("uses authoritative runtime batch size for the existing per-sender queue claim", async () => {
+    runtimeMode.mockResolvedValue("draft");
+    runtimeBatchSize.mockResolvedValue(7);
+    const { repository, gmail } = dependencies("draft");
+    const result = await processEmailQueue({ repository, gmail, allowlist: new Set(["safe@example.com"]) });
+    expect(repository.claim).toHaveBeenCalledWith("draft", 7, expect.any(String));
+    expect(result.batchSize).toBe(7);
   });
 
   it("preview never touches the queue or Gmail", async () => {

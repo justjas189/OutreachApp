@@ -12,7 +12,7 @@ const campaignPage = read("src/app/(admin)/campaigns/[id]/page.tsx");
 
 describe("Quick Run and delivery mode UI", () => {
   it("re-authorizes actions and rechecks readiness server-side", () => {
-    expect(actions.match(/await requireAdmin\(\)/g)?.length).toBe(2);
+    expect(actions.match(/await requireAdmin\(\)/g)?.length).toBe(3);
     expect(actions).toContain('supabase.rpc("get_campaign_readiness"');
     expect(actions).toContain('supabase.rpc("schedule_campaign"');
     expect(actions).not.toContain("processEmailQueue");

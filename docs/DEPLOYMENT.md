@@ -55,6 +55,8 @@ GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="YOUR_PRIVATE_KEY_WITH_LITERAL_\n_NEWLINES"
 TOKEN_ENCRYPTION_KEY=YOUR_UNIQUE_BASE64URL_32_BYTE_KEY
 
 EMAIL_MODE=preview
+# Environment fallback. Dashboard runtime value remains bounded to 1-50.
+# Limit applies per connected sender per worker execution.
 EMAIL_BATCH_SIZE=5
 TEST_RECIPIENT_ALLOWLIST=you@example.com
 CRON_SECRET=YOUR_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
@@ -88,9 +90,10 @@ The worker is server-driven; no browser timer is involved. Each run:
 1. Does nothing in preview mode.
 2. Activates only due, non-archived campaigns.
 3. Enqueues approved emails idempotently using unique `email_draft_id` rows.
-4. Claims small per-sender batches with database row locks and claim tokens.
-5. Rechecks campaign state, sender connection, recipient state, schedule, and suppression immediately before Gmail.
-6. Retries transient errors with capped exponential backoff; permanent errors fail once.
+4. Reads the current database-backed batch size, falling back to `EMAIL_BATCH_SIZE` and then `5` if needed.
+5. Claims that many items per connected sender with database row locks and claim tokens. Total claims can be batch size × eligible connected senders.
+6. Rechecks campaign state, sender connection, recipient state, schedule, and suppression immediately before Gmail.
+7. Retries transient errors with capped exponential backoff; permanent errors fail once.
 
 Paused, future, cancelled-schedule, completed, deleted, and archived campaigns are ineligible. An already-started provider request cannot be revoked mid-request; its final result is still stored for audit, while archive blocks every new claim/preparation.
 
@@ -126,10 +129,12 @@ npm run test:db
 2. **Archive/delete:** Delete a never-sent fake campaign; archive a campaign containing a safe fake history record. Confirm active/history filters and cancelled queue state.
 3. **OAuth:** Keep Google OAuth in testing and authorize only designated test Gmail accounts. Sender accounts receive only their one-time connection URLs and never Sheet/dashboard access.
 4. **Draft:** Set `TEST_RECIPIENT_ALLOWLIST` to addresses you control, change the deployment ceiling to `EMAIL_MODE=draft`, redeploy, then select Draft in the authenticated dashboard. Schedule one approved email and confirm Gmail creates a draft but sends nothing.
-5. **Live ceiling:** Keep runtime mode in Draft, keep the allowlist, set `EMAIL_BATCH_SIZE=1`, change the deployment ceiling to `EMAIL_MODE=live`, and redeploy. This ceiling change alone does not change the database runtime mode.
+5. **Live ceiling:** Keep runtime mode in Draft, keep the allowlist, set the dashboard runtime batch size to `1`, change the deployment ceiling to `EMAIL_MODE=live`, and redeploy. This ceiling change alone does not change the database runtime mode.
 6. **Live canary:** In the dashboard, select Live and accept the explicit real-email confirmation. Quick Run one approved message to an address you control. Confirm exactly one send log and no duplicate queue/send.
 7. **Observe:** Check campaign audit history, Gmail result, suppression behavior, cron logs, and Supabase logs/advisors. Return to preview immediately if anything is unexpected.
 8. **Expand slowly:** Increase the batch size only within provider limits. Remove or expand the allowlist only after legal/compliance review and a successful controlled canary. The app does not bypass Gmail limits.
+
+Dashboard batch-size changes take effect on the next worker execution without a restart. Live increases of five or more require explicit confirmation and are audited with actor, previous value, new value, and timestamp.
 
 ## 7. Rollback and incident response
 

@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import {
+  EMAIL_BATCH_SIZE_DEFAULT,
+  EMAIL_BATCH_SIZE_MAX,
+  EMAIL_BATCH_SIZE_MIN,
+} from "@/lib/settings/batch-size-shared";
+
 const supabaseSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
@@ -100,8 +106,12 @@ export function getEmailMode(): EmailMode {
 }
 
 export function parseEmailBatchSize(value: string | undefined): number {
-  const parsed = z.coerce.number().int().min(1).max(50).safeParse(value ?? "5");
-  return parsed.success ? parsed.data : 5;
+  const parsed = z.coerce.number()
+    .int()
+    .min(EMAIL_BATCH_SIZE_MIN)
+    .max(EMAIL_BATCH_SIZE_MAX)
+    .safeParse(value ?? String(EMAIL_BATCH_SIZE_DEFAULT));
+  return parsed.success ? parsed.data : EMAIL_BATCH_SIZE_DEFAULT;
 }
 
 export function getEmailBatchSize(): number {

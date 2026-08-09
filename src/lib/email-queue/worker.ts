@@ -3,10 +3,10 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
-  getEmailBatchSize,
   getTestRecipientAllowlist,
   type EmailMode,
 } from "@/lib/env";
+import { getRuntimeEmailBatchSize } from "@/lib/settings/batch-size";
 import { getRuntimeDeliveryMode } from "@/lib/settings/delivery-mode";
 
 import { classifyGmailError } from "./errors";
@@ -16,6 +16,7 @@ import { createQueueRepository, type QueueRepository } from "./repository";
 
 export type QueueRunResult = {
   mode: EmailMode;
+  batchSize: number;
   enqueued: number;
   claimed: number;
   completed: number;
@@ -33,9 +34,13 @@ type WorkerOptions = {
 };
 
 export async function processEmailQueue(options: WorkerOptions = {}): Promise<QueueRunResult> {
-  const mode = options.mode ?? await getRuntimeDeliveryMode();
+  const [mode, batchSize] = await Promise.all([
+    options.mode === undefined ? getRuntimeDeliveryMode() : Promise.resolve(options.mode),
+    options.batchSize === undefined ? getRuntimeEmailBatchSize() : Promise.resolve(options.batchSize),
+  ]);
   const result: QueueRunResult = {
     mode,
+    batchSize,
     enqueued: 0,
     claimed: 0,
     completed: 0,
@@ -47,7 +52,6 @@ export async function processEmailQueue(options: WorkerOptions = {}): Promise<Qu
 
   const repository = options.repository ?? createQueueRepository();
   const gmail = options.gmail ?? gmailGateway;
-  const batchSize = options.batchSize ?? getEmailBatchSize();
   const allowlist = options.allowlist === undefined ? getTestRecipientAllowlist() : options.allowlist;
   result.enqueued = await repository.enqueue(mode);
   const claimToken = randomUUID();

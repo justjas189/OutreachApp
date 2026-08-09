@@ -17,6 +17,9 @@ describe("queue environment parsing", () => {
   it("defaults unsafe batch values to five", () => {
     expect(parseEmailBatchSize(undefined)).toBe(5);
     expect(parseEmailBatchSize("0")).toBe(5);
+    expect(parseEmailBatchSize("-1")).toBe(5);
+    expect(parseEmailBatchSize("1.5")).toBe(5);
+    expect(parseEmailBatchSize("NaN")).toBe(5);
     expect(parseEmailBatchSize("500")).toBe(5);
     expect(parseEmailBatchSize("8")).toBe(8);
   });

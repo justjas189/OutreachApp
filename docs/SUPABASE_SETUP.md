@@ -72,7 +72,7 @@ Authorization must remain in `raw_app_meta_data` / `app_metadata`. Never put rol
 - `campaigns.archived_at` is a permanent archive marker. Database triggers make archives read-only to normal authenticated admin mutations.
 - `manage_campaign_lifecycle` locks the campaign and determines deletion versus archive server-side. Sent/history/in-flight evidence forces archive; safe owned rows cascade only for never-sent deletion.
 - Enqueue and final preparation require a due, active, unpaused, non-archived campaign. Clearing a future schedule, deleting, or archiving removes eligibility.
-- Apply migrations through `20260809160316_runtime_delivery_mode_and_quick_run.sql` before enabling the cron worker. This adds preview-first runtime settings, append-only mode audit history, and shared campaign readiness checks.
+- Apply migrations through `20260809175106_runtime_email_batch_size.sql` before enabling the cron worker. Runtime delivery mode and per-sender batch size use the same admin-only settings/audit architecture.
 
 ## 5. Optional local Supabase
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BatchSizeControl } from "@/components/batch-size-control";
 import { DeliveryModeControl } from "@/components/delivery-mode-control";
 import { QuickRunPanel } from "@/components/quick-run-panel";
 import { requireAdmin } from "@/lib/auth/admin";
@@ -12,6 +13,7 @@ import {
   formatTimeZoneLabel,
   getSupportedTimeZones,
 } from "@/lib/scheduling/timezone";
+import { getRuntimeEmailBatchSizeState } from "@/lib/settings/batch-size";
 import { getRuntimeDeliveryModeState } from "@/lib/settings/delivery-mode";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -24,6 +26,9 @@ const noticeMessages: Record<string, { tone: string; message: string }> = {
   "mode-constrained": { tone: "border-[#f1d6a6] bg-[#fff8e8] text-[#805516]", message: "Deployment EMAIL_MODE ceiling blocks that delivery mode." },
   "mode-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Invalid delivery mode rejected. Effective mode remains safe." },
   "mode-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Delivery mode could not be updated." },
+  "batch-size-updated": { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Runtime email batch size updated and audit record saved." },
+  "batch-size-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Batch size must be a whole number from 1 through 50." },
+  "batch-size-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Batch size could not be updated. Live increases of 5 or more require confirmation." },
   "quick-run-started": { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign start saved. Server worker will process eligible work." },
   "quick-run-scheduled": { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign schedule saved server-side." },
   "quick-run-blocked": { tone: "border-[#f1d6a6] bg-[#fff8e8] text-[#805516]", message: "Quick Run rejected because campaign readiness changed or processing already started." },
@@ -34,7 +39,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   await requireAdmin();
   const query = await searchParams;
   const supabase = await createSupabaseServerClient();
-  const [campaignResult, recipientResult, connectedSenderResult, auditResult, deliveryState] = await Promise.all([
+  const [campaignResult, recipientResult, connectedSenderResult, auditResult, deliveryState, batchSizeState] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id,name,city,status,scheduled_at,schedule_timezone,paused_at,archived_at")
@@ -45,10 +50,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     supabase.from("sender_accounts").select("id", { count: "exact", head: true }).eq("status", "CONNECTED"),
     supabase
       .from("application_setting_audit")
-      .select("id,previous_value,new_value,changed_by,changed_at")
+      .select("id,setting_name,previous_value,new_value,changed_by,changed_at")
       .order("changed_at", { ascending: false })
-      .limit(5),
+      .limit(8),
     getRuntimeDeliveryModeState(),
+    getRuntimeEmailBatchSizeState(),
   ]);
 
   if (campaignResult.error || recipientResult.error || connectedSenderResult.error || auditResult.error) {
@@ -144,6 +150,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               Stored mode is {deliveryState.storedMode?.toUpperCase() ?? "UNKNOWN"}; deployment ceiling forces {deliveryState.effectiveMode.toUpperCase()}.
             </p>
           ) : null}
+          <BatchSizeControl
+            currentBatchSize={batchSizeState.effectiveBatchSize}
+            deliveryMode={deliveryState.effectiveMode}
+            source={batchSizeState.source}
+          />
         </article>
 
         <article className="panel p-6 sm:p-7">
@@ -179,6 +190,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
         <div className="mt-6">
           <QuickRunPanel
+            batchSize={batchSizeState.effectiveBatchSize}
             campaigns={readyCampaigns}
             deliveryMode={deliveryState.effectiveMode}
             timezoneOptions={timezoneOptions}
@@ -229,13 +241,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </article>
 
         <article className="panel p-6 sm:p-7">
-          <p className="mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#607580]">Mode audit</p>
+          <p className="mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#607580]">Settings audit</p>
           <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Recent changes</h2>
           {auditResult.data?.length ? (
             <ul className="mt-5 space-y-3">
               {auditResult.data.map((entry) => (
                 <li className="rounded-lg bg-[#eef4f7] px-4 py-3 text-sm" key={entry.id}>
-                  <strong className="mono uppercase">{entry.previous_value} → {entry.new_value}</strong>
+                  <strong className="mono uppercase">
+                    {entry.setting_name === "delivery_mode"
+                      ? `${entry.previous_value} → ${entry.new_value}`
+                      : `Batch ${entry.previous_value} → ${entry.new_value}`}
+                  </strong>
                   <span className="mt-1 block text-xs text-[#607580]">
                     {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(entry.changed_at))} · admin {entry.changed_by.slice(0, 8)}
                   </span>
@@ -243,7 +259,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ))}
             </ul>
           ) : (
-            <p className="mt-5 text-sm text-[#607580]">No runtime mode changes yet.</p>
+            <p className="mt-5 text-sm text-[#607580]">No runtime setting changes yet.</p>
           )}
         </article>
       </section>

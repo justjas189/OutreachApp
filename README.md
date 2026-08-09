@@ -59,6 +59,8 @@ npm run build
 
 `EMAIL_MODE` is fail-safe: missing or invalid values resolve to `preview`. It is now the deployment ceiling/fallback; authenticated admins choose the runtime mode from the dashboard, but cannot exceed that ceiling. Database lookup errors fail closed to preview. Preview mode never enqueues or calls Gmail. The protected queue endpoint is `/api/cron/process-email-queue`; `vercel.json` invokes it every five minutes in production.
 
-Dashboard Quick Run lists only campaigns that pass the shared database readiness check: active lifecycle, recipients, connected sender credentials, matching templates, generated/approved previews, suppression handling, and no queue history. Quick Run calls the same scheduling and queue RPCs as the campaign page.
+`EMAIL_BATCH_SIZE` remains the safe environment fallback and defaults to `5` when missing or invalid. Authenticated admins can select the active runtime value from `1` through `50` without restarting the app. Existing queue semantics are unchanged: the value limits claims **per connected sender per worker execution**, so total claimed work can be the value multiplied by the number of eligible connected senders. Provider limits, atomic claims, suppression, allowlist, retry, schedule, lifecycle, and duplicate-send checks still apply.
+
+Dashboard Quick Run lists only campaigns that pass the shared database readiness check: active lifecycle, recipients, connected sender credentials, matching templates, generated/approved previews, suppression handling, and no queue history. Quick Run shows the active per-sender batch size and calls the same scheduling and queue RPCs as the campaign page.
 
 For first deployment and safe preview → draft → live rollout, follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Security reporting and credential-response guidance are in [SECURITY.md](SECURITY.md).

@@ -122,15 +122,16 @@ export type SendLogRow = {
 export type ApplicationSettingsRow = {
   singleton: boolean;
   delivery_mode: RuntimeEmailMode;
+  email_batch_size: number;
   updated_by: string | null;
   updated_at: string;
 };
 
 export type ApplicationSettingAuditRow = {
   id: number;
-  setting_name: "delivery_mode";
-  previous_value: RuntimeEmailMode;
-  new_value: RuntimeEmailMode;
+  setting_name: "delivery_mode" | "email_batch_size";
+  previous_value: string;
+  new_value: string;
   changed_by: string;
   changed_at: string;
 };
@@ -362,6 +363,10 @@ export type Database = {
       set_runtime_email_mode: {
         Args: { p_mode: RuntimeEmailMode };
         Returns: RuntimeEmailMode;
+      };
+      set_runtime_email_batch_size: {
+        Args: { p_batch_size: number; p_live_change_confirmed?: boolean };
+        Returns: number;
       };
       get_campaign_readiness: {
         Args: { p_campaign_id: string };

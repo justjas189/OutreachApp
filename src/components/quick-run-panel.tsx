@@ -18,10 +18,11 @@ type QuickRunCampaign = {
 type QuickRunPanelProps = {
   campaigns: QuickRunCampaign[];
   deliveryMode: EmailMode;
+  batchSize: number;
   timezoneOptions: Array<{ label: string; value: string }>;
 };
 
-export function QuickRunPanel({ campaigns, deliveryMode, timezoneOptions }: QuickRunPanelProps) {
+export function QuickRunPanel({ campaigns, deliveryMode, batchSize, timezoneOptions }: QuickRunPanelProps) {
   const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
   const [scheduleMode, setScheduleMode] = useState<"now" | "later">("now");
   const selected = useMemo(
@@ -39,7 +40,7 @@ export function QuickRunPanel({ campaigns, deliveryMode, timezoneOptions }: Quic
 
   const readiness = selected.readiness;
   const scheduleLabel = scheduleMode === "now" ? "Now" : "Selected date and time";
-  const confirmation = `${deliveryMode === "live" ? "REAL EMAILS WILL BE SENT.\n\n" : ""}Ready to run\n\nCampaign: ${selected.name}\nMode: ${deliveryMode}\nApproved: ${readiness.approvedCount}\nSenders: ${readiness.connectedSenderCount}\nSuppressed: ${readiness.suppressedCount}\nSchedule: ${scheduleLabel}`;
+  const confirmation = `${deliveryMode === "live" ? "REAL EMAILS WILL BE SENT.\n\n" : ""}Ready to run\n\nCampaign: ${selected.name}\nMode: ${deliveryMode}\nApproved: ${readiness.approvedCount}\nSenders: ${readiness.connectedSenderCount}\nBatch size: ${batchSize} per sender\nSuppressed: ${readiness.suppressedCount}\nSchedule: ${scheduleLabel}`;
 
   return (
     <form action={quickRunCampaignAction} className="space-y-5">
@@ -112,6 +113,7 @@ export function QuickRunPanel({ campaigns, deliveryMode, timezoneOptions }: Quic
         <span className="ml-2">
           {deliveryMode === "preview" ? "Schedule is saved; Gmail remains untouched." : deliveryMode === "draft" ? "Only Gmail drafts will be created." : "Real eligible email can be sent."}
         </span>
+        <span className="mt-1 block text-xs">Batch size: {batchSize} per connected sender per worker execution.</span>
       </div>
 
       <ConfirmSubmitButton
