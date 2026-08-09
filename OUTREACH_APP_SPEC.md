@@ -14,7 +14,7 @@ When the user specifies a phase or phase range:
 
 At the end of each phase range, stop and provide a verification report before continuing.
 
-Build a production-minded MVP web application called “Rip City Outreach”.
+Build a production-minded MVP web application called “AtlasReach”.
 
 The purpose of the application is to let an admin manage outreach campaigns using recipient data from a private Google Sheet while connecting multiple Gmail sender accounts through OAuth.
 
@@ -108,7 +108,7 @@ Example:
 The page should only show something similar to:
 
 --------------------------------
-Rip City Outreach
+AtlasReach
 
 Connect your Gmail account so it can be used
 as an authorized sender for Rip City Review.
@@ -652,7 +652,7 @@ Pages:
 
 Dashboard summary example:
 
-Rip City Outreach
+AtlasReach
 
 Campaigns
 3

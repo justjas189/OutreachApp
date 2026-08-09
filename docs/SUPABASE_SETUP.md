@@ -4,7 +4,7 @@ This app uses Supabase Auth for admins and Postgres RLS for every exposed table.
 
 ## 1. Create and link a project
 
-1. Create a hosted Supabase project and save its database password securely.
+1. Create a hosted Supabase project for AtlasReach and save its database password securely.
 2. In **Project Settings → API Keys**, copy the project URL and **publishable** key.
 3. Copy `.env.example` to `.env.local` and set:
 

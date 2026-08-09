@@ -4,9 +4,9 @@ Google Sheets uses a dedicated service account. Gmail sender accounts use separa
 
 ## 1. Create the Google Cloud resources
 
-1. Create or select a Google Cloud project for Rip City Outreach.
+1. Create or select a Google Cloud project for AtlasReach.
 2. Open **APIs & Services → Library** and enable **Google Sheets API** and **Gmail API**.
-3. Open **IAM & Admin → Service Accounts** and create a dedicated service account such as `rip-city-sheets-reader`.
+3. Open **IAM & Admin → Service Accounts** and create a dedicated service account such as `atlasreach-sheets-reader`.
 4. Do not enable domain-wide delegation. The service account does not need broad project IAM roles to read a Sheet shared directly with it.
 5. Create a JSON key only because Vercel cannot attach a Google workload identity directly. Download it once and store it in a password manager or secret manager. Never commit the JSON file.
 
@@ -55,7 +55,7 @@ If preview fails, confirm the Sheets API is enabled, the Sheet is shared with th
 
 ## 5. Configure OAuth consent
 
-1. Open **Google Auth Platform** and configure branding, audience, and contact information.
+1. Open **Google Auth Platform** and configure the OAuth application name as **AtlasReach**, then set audience and contact information.
 2. For development, keep the app in testing and add every Gmail sender as a test user.
 3. Add only these scopes:
    - `openid`

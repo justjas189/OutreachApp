@@ -18,8 +18,8 @@ export default async function ConnectSenderPage({ params }: { params: Promise<{ 
   return (
     <main className="grid min-h-screen place-items-center px-5 py-12">
       <section className="panel w-full max-w-lg p-7 text-center sm:p-10">
-        <span className="mx-auto grid size-12 place-items-center rounded-xl bg-[#11202c] font-black text-white">RC</span>
-        <p className="mono mt-5 text-xs font-bold uppercase tracking-[0.16em] text-[#607580]">Rip City Outreach</p>
+        <span className="mx-auto grid size-12 place-items-center rounded-xl bg-[#11202c] font-black text-white">AR</span>
+        <p className="mono mt-5 text-xs font-bold uppercase tracking-[0.16em] text-[#607580]">AtlasReach</p>
         <h1 className="mt-3 text-3xl font-[800] tracking-[-0.04em]">Connect your Gmail account</h1>
         {available ? (
           <>

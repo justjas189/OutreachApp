@@ -6,10 +6,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Rip City Outreach",
-    template: "%s · Rip City Outreach",
+    default: "AtlasReach — Admin Desk",
+    template: "%s | AtlasReach",
   },
-  description: "Private, admin-operated campaign recipient importing for Rip City Review.",
+  description: "AtlasReach outreach campaign management platform.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -22,7 +22,7 @@ export function buildRawEmail(input: {
     `To: ${to}`,
     `From: ${from}`,
     `Subject: ${encodedHeader(input.subject.trim())}`,
-    `Message-ID: <${input.queueId}@rip-city-outreach.invalid>`,
+    `Message-ID: <${input.queueId}@atlasreach.invalid>`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: base64",

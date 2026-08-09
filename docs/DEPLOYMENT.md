@@ -1,13 +1,13 @@
 # Deployment — Vercel + Supabase
 
-Deploy only after local lint, type checks, Vitest, pgTAP, and production build pass. Production must begin in `EMAIL_MODE=preview`; never make live the default. `EMAIL_MODE` is the deployment ceiling/fallback. Dashboard runtime mode cannot exceed it, and database-setting lookup failures fail closed to preview.
+Deploy AtlasReach only after local lint, type checks, Vitest, pgTAP, and production build pass. Production must begin in `EMAIL_MODE=preview`; never make live the default. `EMAIL_MODE` is the deployment ceiling/fallback. Dashboard runtime mode cannot exceed it, and database-setting lookup failures fail closed to preview.
 
 ## 1. Prerequisites
 
 - Node.js 22 or newer
 - a production Supabase project
 - a Google Cloud project configured by [GOOGLE_SETUP.md](GOOGLE_SETUP.md)
-- a Vercel account and project
+- a Vercel account and project; recommended project name: `atlasreach`
 - Vercel CLI (recommended):
 
   ```bash

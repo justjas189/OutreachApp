@@ -1,6 +1,6 @@
-# Rip City Outreach
+# AtlasReach
 
-Production-minded outreach campaign dashboard built with Next.js App Router, TypeScript, Tailwind CSS, Supabase Auth/Postgres/RLS, Google Sheets API, Gmail API/Google OAuth, and Vitest.
+AtlasReach is a production-minded outreach campaign management platform built with Next.js App Router, TypeScript, Tailwind CSS, Supabase Auth/Postgres/RLS, Google Sheets API, Gmail API/Google OAuth, and Vitest.
 
 Implemented through Phases 1–10:
 

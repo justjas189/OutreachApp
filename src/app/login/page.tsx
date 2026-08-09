@@ -18,7 +18,7 @@ export default async function LoginPage() {
         <div className="absolute inset-y-0 left-0 w-2 bg-[#ed7b3a]" />
         <div>
           <p className="mono text-xs font-semibold uppercase tracking-[0.22em] text-[#9ec3df]">
-            Rip City Review / Operations
+            AtlasReach Review / Operations
           </p>
           <h1 className="mt-7 max-w-xl text-5xl font-[780] leading-[1.06] tracking-[-0.045em]">
             Outreach data stays behind one controlled desk.
@@ -39,9 +39,9 @@ export default async function LoginPage() {
       <section className="flex items-center justify-center px-5 py-12 sm:px-10">
         <div className="panel w-full max-w-md p-7 sm:p-9">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-[#11202c] font-black text-white">RC</span>
+            <span className="grid size-10 place-items-center rounded-xl bg-[#11202c] font-black text-white">AR</span>
             <div>
-              <p className="font-extrabold">Rip City Outreach</p>
+              <p className="font-extrabold">AtlasReach</p>
               <p className="mono text-[0.68rem] uppercase tracking-[0.15em] text-[#607580]">Admin console</p>
             </div>
           </div>

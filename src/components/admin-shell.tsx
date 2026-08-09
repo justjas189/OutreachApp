@@ -24,10 +24,10 @@ export function AdminShell({ adminEmail, emailMode, children }: AdminShellProps)
     <div className="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]" data-delivery-mode={emailMode}>
       <aside className={`border-b border-white/10 bg-[#11202c] text-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r ${emailMode === "live" ? "shadow-[inset_-5px_0_0_#dc2626]" : ""}`}>
         <div className="flex items-center justify-between px-5 py-5 lg:block lg:px-6 lg:py-7">
-          <Link className="flex items-center gap-3" href="/dashboard">
-            <span className="grid size-10 place-items-center rounded-xl bg-white text-sm font-black text-[#11202c]">RC</span>
+          <Link aria-label="AtlasReach Admin Desk home" className="flex items-center gap-3" href="/dashboard">
+            <span className="grid size-10 place-items-center rounded-xl bg-white text-sm font-black text-[#11202c]">AR</span>
             <span>
-              <span className="block font-extrabold">Rip City Outreach</span>
+              <span className="block font-extrabold">AtlasReach</span>
               <span className="mono block text-[0.62rem] uppercase tracking-[0.17em] text-white/50">Admin desk</span>
             </span>
           </Link>
