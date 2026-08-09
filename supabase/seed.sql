@@ -13,7 +13,7 @@ insert into public.templates (
   'Can {{NAME}} Be Featured in {{CITY}}''s {{GUIDE_TITLE}} Guide?',
   'Hi {{NAME}} Team,\n\nThis is safe local preview content. No Gmail draft is created and no email is sent.\n\nReference: {{LINK}}'
 )
-on conflict (business_type) do nothing;
+on conflict (lower(btrim(business_type))) do nothing;
 
 do $$
 declare

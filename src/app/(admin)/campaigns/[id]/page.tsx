@@ -5,14 +5,15 @@ import { notFound } from "next/navigation";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { TimezoneSelect } from "@/components/timezone-select";
 import { decideCampaignDisposition } from "@/lib/campaigns/lifecycle";
+import { parseCampaignReadiness } from "@/lib/campaigns/readiness";
 import { getPagination } from "@/lib/pagination";
-import { getEmailMode } from "@/lib/env";
 import {
   formatForDateTimeLocal,
   formatInTimeZone,
   formatTimeZoneLabel,
   getSupportedTimeZones,
 } from "@/lib/scheduling/timezone";
+import { getRuntimeDeliveryModeState } from "@/lib/settings/delivery-mode";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
@@ -65,6 +66,8 @@ export default async function CampaignDetailPage({
     recipientStatusesResult,
     queueResult,
     sendLogResult,
+    readinessResult,
+    deliveryState,
   ] = await Promise.all([
     supabase
       .from("campaigns")
@@ -102,6 +105,8 @@ export default async function CampaignDetailPage({
       .eq("campaign_id", id)
       .order("created_at", { ascending: false })
       .limit(10),
+    supabase.rpc("get_campaign_readiness", { p_campaign_id: id }),
+    getRuntimeDeliveryModeState(),
   ]);
 
   if (
@@ -114,6 +119,7 @@ export default async function CampaignDetailPage({
     || recipientStatusesResult.error
     || queueResult.error
     || sendLogResult.error
+    || readinessResult.error
   ) {
     throw new Error("Campaign details could not be loaded from Supabase.");
   }
@@ -137,6 +143,7 @@ export default async function CampaignDetailPage({
   }
 
   const campaign = campaignResult.data;
+  const readiness = parseCampaignReadiness(readinessResult.data);
   const archived = campaign.status === "ARCHIVED" || Boolean(campaign.archived_at);
   const createdAt = new Intl.DateTimeFormat("en-US", {
     dateStyle: "long",
@@ -175,11 +182,14 @@ export default async function CampaignDetailPage({
   }
   const scheduleTimezone = campaign.schedule_timezone ?? "UTC";
   const futureSchedule = Boolean(campaign.scheduled_at && campaign.status === "READY" && !campaign.started_at);
-  const scheduleEditable = !archived && !campaign.started_at && (queueResult.data?.length ?? 0) === 0;
+  const scheduleEditable = !archived
+    && !campaign.started_at
+    && (queueResult.data?.length ?? 0) === 0
+    && readiness.ready;
   const scheduleInputValue = campaign.scheduled_at && campaign.schedule_timezone
     ? formatForDateTimeLocal(campaign.scheduled_at, campaign.schedule_timezone)
     : "";
-  const emailMode = getEmailMode();
+  const emailMode = deliveryState.effectiveMode;
   const sentEmailCount = recipientStatusCounts.get("SENT") ?? 0;
   const processingQueueCount = queueStatusCounts.get("PROCESSING") ?? 0;
   const disposition = decideCampaignDisposition({
@@ -343,6 +353,27 @@ export default async function CampaignDetailPage({
         </article>
       </section>
 
+      <section className={`mt-8 rounded-xl border p-6 ${readiness.ready ? "border-[#bfd8ca] bg-[#eef8f2]" : "border-[#f1d6a6] bg-[#fff8e8]"}`}>
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Campaign readiness</p>
+            <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">
+              {readiness.ready ? "Ready for Quick Run" : "Needs attention before scheduling"}
+            </h2>
+          </div>
+          <span className={`mono self-start rounded-full px-3 py-1 text-[0.62rem] font-bold uppercase ${readiness.ready ? "bg-[#d9eee5] text-[#1f6e4c]" : "bg-[#fff0d6] text-[#805516]"}`}>
+            {readiness.ready ? "Ready" : `${readiness.blockingReasons.length} blockers`}
+          </span>
+        </div>
+        {readiness.ready ? (
+          <p className="mt-3 text-sm text-[#1f6e4c]">Recipients, templates, approvals, sender connections, credentials, lifecycle, and queue state passed server checks.</p>
+        ) : (
+          <ul className="mt-4 grid gap-2 text-sm text-[#805516] sm:grid-cols-2">
+            {readiness.blockingReasons.map((reason) => <li key={reason}>• {reason}</li>)}
+          </ul>
+        )}
+      </section>
+
       <section className="panel mt-8 p-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
@@ -350,38 +381,42 @@ export default async function CampaignDetailPage({
             <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Queue approved emails</h2>
             {campaign.scheduled_at ? (
               <p className="mt-2 text-sm text-[#526873]">
-                {formatInTimeZone(campaign.scheduled_at, scheduleTimezone)} · timezone: <strong>{scheduleTimezone}</strong>
+                {formatInTimeZone(campaign.scheduled_at, scheduleTimezone)} · {formatInTimeZone(campaign.scheduled_at, "UTC")} · timezone: <strong>{scheduleTimezone}</strong>
               </p>
             ) : (
               <p className="mt-2 text-sm text-[#526873]">No start time selected. Timezone will be stored with the UTC instant.</p>
             )}
           </div>
-          <span className="mono rounded-full bg-[#e5edf2] px-3 py-1.5 text-[0.65rem] font-bold uppercase">
+          <span className={`mono rounded-full px-3 py-1.5 text-[0.65rem] font-bold uppercase ${emailMode === "live" ? "bg-red-600 text-white" : "bg-[#e5edf2]"}`}>
             {emailMode} mode
           </span>
         </div>
 
         {scheduleEditable ? (
-          <form action={scheduleCampaignAction} className="mt-6 grid gap-4 lg:grid-cols-[10rem_1fr_1fr_auto] lg:items-end">
+          <form action={scheduleCampaignAction} className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-[10rem_minmax(15rem,1fr)_minmax(15rem,1fr)_auto] xl:items-start">
             <input name="campaignId" type="hidden" value={id} />
             <label className="text-sm font-bold">Start
-              <select className="field mt-2" defaultValue={campaign.scheduled_at && futureSchedule ? "later" : "now"} name="scheduleMode">
+              <select className="field mt-2 min-h-12" defaultValue={campaign.scheduled_at && futureSchedule ? "later" : "now"} name="scheduleMode">
                 <option value="now">Send now</option>
                 <option value="later">Schedule</option>
               </select>
             </label>
             <label className="text-sm font-bold">Local date and time
-              <input className="field mt-2" defaultValue={scheduleInputValue} name="localDateTime" type="datetime-local" />
+              <input className="field mt-2 min-h-12" defaultValue={scheduleInputValue} name="localDateTime" type="datetime-local" />
             </label>
             <TimezoneSelect
               initialValue={campaign.schedule_timezone}
               options={timezoneOptions}
             />
-            <button className="button-primary" type="submit">Save schedule</button>
+            <button className="button-primary min-h-12 w-full sm:col-span-2 xl:col-span-1 xl:mt-[1.75rem] xl:w-auto" type="submit">Save schedule</button>
           </form>
         ) : (
           <p className="mt-5 text-sm text-[#607580]">
-            {archived ? "Archived campaigns cannot be scheduled or processed." : "Schedule editing is locked because queue processing has started."}
+            {archived
+              ? "Archived campaigns cannot be scheduled or processed."
+              : !readiness.ready
+                ? "Resolve campaign readiness blockers before saving a start time."
+                : "Schedule editing is locked because queue processing has started."}
           </p>
         )}
 

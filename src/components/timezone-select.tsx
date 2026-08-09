@@ -24,11 +24,11 @@ export function TimezoneSelect({ initialValue, options }: TimezoneSelectProps) {
   const value = manualValue ?? initialValue ?? detectedValue;
 
   return (
-    <label className="text-sm font-bold">
+    <label className="block text-sm font-bold">
       Timezone
       <input
         autoComplete="off"
-        className="field mt-2"
+        className="field mt-2 min-h-12"
         list={listId}
         name="timezone"
         onChange={(event) => setManualValue(event.target.value)}

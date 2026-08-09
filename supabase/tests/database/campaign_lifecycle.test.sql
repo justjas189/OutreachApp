@@ -16,6 +16,17 @@ insert into public.sender_accounts (id, email, display_name, status, connected_a
   ('00000000-0000-4000-8000-000000000010', 'sender.one@example.com', 'Sender one', 'CONNECTED', now()),
   ('00000000-0000-4000-8000-000000000011', 'sender.two@example.com', 'Sender two', 'CONNECTED', now());
 
+insert into private.sender_credentials (sender_account_id, encrypted_refresh_token) values
+  ('00000000-0000-4000-8000-000000000010', 'safe-encrypted-example-token-one'),
+  ('00000000-0000-4000-8000-000000000011', 'safe-encrypted-example-token-two');
+
+insert into public.templates (
+  business_type, guide_title, audience, services_focus, body_template, subject_template
+) values (
+  'Test', 'Example Guide', 'example readers', 'example services',
+  'Hello {{NAME}}', 'Example {{NAME}}'
+);
+
 insert into public.campaigns (
   id, name, city, status, created_by, scheduled_at, schedule_timezone, started_at
 ) values

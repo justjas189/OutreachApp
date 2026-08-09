@@ -1,6 +1,6 @@
 # Deployment — Vercel + Supabase
 
-Deploy only after local lint, type checks, Vitest, pgTAP, and production build pass. Production must begin in `EMAIL_MODE=preview`; never make live the default.
+Deploy only after local lint, type checks, Vitest, pgTAP, and production build pass. Production must begin in `EMAIL_MODE=preview`; never make live the default. `EMAIL_MODE` is the deployment ceiling/fallback. Dashboard runtime mode cannot exceed it, and database-setting lookup failures fail closed to preview.
 
 ## 1. Prerequisites
 
@@ -122,17 +122,19 @@ npm run test:db
 
 ## 6. Safe first rollout
 
-1. **Preview:** Keep `EMAIL_MODE=preview`. Use fake `example.com` Sheet rows, import, assign senders, generate/edit/approve, test schedule edit/cancel/pause/resume, and confirm the worker reports zero queue/Gmail work.
+1. **Preview:** Keep `EMAIL_MODE=preview`. Runtime setting starts in Preview. Use fake `example.com` Sheet rows, import, assign senders, generate/edit/approve, test schedule edit/cancel/pause/resume, and confirm the worker reports zero queue/Gmail work.
 2. **Archive/delete:** Delete a never-sent fake campaign; archive a campaign containing a safe fake history record. Confirm active/history filters and cancelled queue state.
 3. **OAuth:** Keep Google OAuth in testing and authorize only designated test Gmail accounts. Sender accounts receive only their one-time connection URLs and never Sheet/dashboard access.
-4. **Draft:** Set `TEST_RECIPIENT_ALLOWLIST` to addresses you control, change `EMAIL_MODE=draft`, redeploy, schedule one approved email, and confirm Gmail creates a draft but sends nothing.
-5. **Live canary:** Keep the allowlist, set `EMAIL_BATCH_SIZE=1`, explicitly set `EMAIL_MODE=live`, redeploy, and schedule one approved message to an address you control. Confirm exactly one send log and no duplicate queue/send.
-6. **Observe:** Check campaign audit history, Gmail result, suppression behavior, cron logs, and Supabase logs/advisors. Return to preview immediately if anything is unexpected.
-7. **Expand slowly:** Increase the batch size only within provider limits. Remove or expand the allowlist only after legal/compliance review and a successful controlled canary. The app does not bypass Gmail limits.
+4. **Draft:** Set `TEST_RECIPIENT_ALLOWLIST` to addresses you control, change the deployment ceiling to `EMAIL_MODE=draft`, redeploy, then select Draft in the authenticated dashboard. Schedule one approved email and confirm Gmail creates a draft but sends nothing.
+5. **Live ceiling:** Keep runtime mode in Draft, keep the allowlist, set `EMAIL_BATCH_SIZE=1`, change the deployment ceiling to `EMAIL_MODE=live`, and redeploy. This ceiling change alone does not change the database runtime mode.
+6. **Live canary:** In the dashboard, select Live and accept the explicit real-email confirmation. Quick Run one approved message to an address you control. Confirm exactly one send log and no duplicate queue/send.
+7. **Observe:** Check campaign audit history, Gmail result, suppression behavior, cron logs, and Supabase logs/advisors. Return to preview immediately if anything is unexpected.
+8. **Expand slowly:** Increase the batch size only within provider limits. Remove or expand the allowlist only after legal/compliance review and a successful controlled canary. The app does not bypass Gmail limits.
 
 ## 7. Rollback and incident response
 
-- Switch `EMAIL_MODE=preview` and redeploy to stop new Gmail operations safely.
+- Fast application control: switch runtime mode to Preview in the authenticated dashboard.
+- Deployment kill switch: set `EMAIL_MODE=preview` and redeploy. This ceiling overrides any stored Draft/Live selection.
 - Pause active campaigns in the admin UI. Cancel future schedules where appropriate.
 - Disable the Vercel cron job if worker execution itself must stop.
 - Revoke compromised Google OAuth/client/service-account credentials and Supabase keys; rotate `CRON_SECRET`.

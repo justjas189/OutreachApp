@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/admin";
 import { generateRecipientPreview, normalizeBusinessType } from "@/lib/email-previews/generator";
-import { isSelectableTimeZone, localDateTimeToUtc } from "@/lib/scheduling/timezone";
+import { resolveScheduleDate, scheduleInputSchema } from "@/lib/scheduling/schedule-input";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
 
@@ -22,15 +22,6 @@ const campaignDetailsSchema = z.object({
   name: z.string().trim().min(2).max(120),
   city: z.string().trim().min(2).max(120),
 });
-const scheduleSchema = z.discriminatedUnion("scheduleMode", [
-  z.object({ scheduleMode: z.literal("now"), campaignId: z.uuid(), timezone: z.string().trim().refine(isSelectableTimeZone) }),
-  z.object({
-    scheduleMode: z.literal("later"),
-    campaignId: z.uuid(),
-    timezone: z.string().trim().refine(isSelectableTimeZone),
-    localDateTime: z.string().min(1),
-  }),
-]);
 
 function campaignLocation(campaignId: string, notice: string) {
   return `/campaigns/${campaignId}?notice=${notice}`;
@@ -163,7 +154,7 @@ export async function generateCampaignPreviewsAction(formData: FormData) {
 
 export async function scheduleCampaignAction(formData: FormData) {
   await requireAdmin();
-  const parsed = scheduleSchema.safeParse({
+  const parsed = scheduleInputSchema.safeParse({
     scheduleMode: formData.get("scheduleMode"),
     campaignId: formData.get("campaignId"),
     timezone: formData.get("timezone"),
@@ -173,13 +164,8 @@ export async function scheduleCampaignAction(formData: FormData) {
 
   let scheduledAt: Date;
   try {
-    scheduledAt = parsed.data.scheduleMode === "now"
-      ? new Date()
-      : localDateTimeToUtc(parsed.data.localDateTime, parsed.data.timezone);
+    scheduledAt = resolveScheduleDate(parsed.data);
   } catch {
-    redirect(campaignLocation(parsed.data.campaignId, "schedule-invalid"));
-  }
-  if (parsed.data.scheduleMode === "later" && scheduledAt.getTime() <= Date.now()) {
     redirect(campaignLocation(parsed.data.campaignId, "schedule-invalid"));
   }
 

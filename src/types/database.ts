@@ -1,5 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
+export type RuntimeEmailMode = "preview" | "draft" | "live";
+
 export type CampaignRow = {
   id: string;
   name: string;
@@ -117,6 +119,22 @@ export type SendLogRow = {
   created_at: string;
 };
 
+export type ApplicationSettingsRow = {
+  singleton: boolean;
+  delivery_mode: RuntimeEmailMode;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export type ApplicationSettingAuditRow = {
+  id: number;
+  setting_name: "delivery_mode";
+  previous_value: RuntimeEmailMode;
+  new_value: RuntimeEmailMode;
+  changed_by: string;
+  changed_at: string;
+};
+
 type TableDefinition<Row, Insert, Update> = {
   Row: Row;
   Insert: Insert;
@@ -183,6 +201,8 @@ export type Database = {
         Partial<SendLogRow> & Pick<SendLogRow, "campaign_id" | "recipient_id" | "status">,
         Partial<SendLogRow>
       >;
+      application_settings: TableDefinition<ApplicationSettingsRow, never, never>;
+      application_setting_audit: TableDefinition<ApplicationSettingAuditRow, never, never>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -339,6 +359,14 @@ export type Database = {
         Args: Record<string, never>;
         Returns: number;
       };
+      set_runtime_email_mode: {
+        Args: { p_mode: RuntimeEmailMode };
+        Returns: RuntimeEmailMode;
+      };
+      get_campaign_readiness: {
+        Args: { p_campaign_id: string };
+        Returns: Json;
+      };
     };
     Enums: {
       campaign_status: CampaignRow["status"];
@@ -347,6 +375,7 @@ export type Database = {
       draft_status: EmailDraftRow["status"];
       email_queue_status: EmailQueueRow["status"];
       email_delivery_mode: EmailQueueRow["delivery_mode"];
+      runtime_email_mode: RuntimeEmailMode;
     };
     CompositeTypes: Record<string, never>;
   };

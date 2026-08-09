@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+const runtimeMode = vi.hoisted(() => vi.fn(async () => "preview" as const));
+vi.mock("@/lib/settings/delivery-mode", () => ({ getRuntimeDeliveryMode: runtimeMode }));
 
 import type { GmailGateway } from "./gmail";
 import type { QueueRepository } from "./repository";
@@ -31,6 +33,15 @@ function dependencies(mode: "draft" | "live") {
 }
 
 describe("email queue modes", () => {
+  it("reads authoritative runtime mode when no test override is supplied", async () => {
+    const { repository, gmail } = dependencies("draft");
+    await processEmailQueue({ repository, gmail });
+    expect(runtimeMode).toHaveBeenCalledOnce();
+    expect(repository.enqueue).not.toHaveBeenCalled();
+    expect(gmail.createDraft).not.toHaveBeenCalled();
+    expect(gmail.sendMessage).not.toHaveBeenCalled();
+  });
+
   it("preview never touches the queue or Gmail", async () => {
     const { repository, gmail } = dependencies("draft");
     const result = await processEmailQueue({ mode: "preview", repository, gmail });

@@ -4,10 +4,10 @@ import { randomUUID } from "node:crypto";
 
 import {
   getEmailBatchSize,
-  getEmailMode,
   getTestRecipientAllowlist,
   type EmailMode,
 } from "@/lib/env";
+import { getRuntimeDeliveryMode } from "@/lib/settings/delivery-mode";
 
 import { classifyGmailError } from "./errors";
 import { gmailGateway, type GmailGateway } from "./gmail";
@@ -33,7 +33,7 @@ type WorkerOptions = {
 };
 
 export async function processEmailQueue(options: WorkerOptions = {}): Promise<QueueRunResult> {
-  const mode = options.mode ?? getEmailMode();
+  const mode = options.mode ?? await getRuntimeDeliveryMode();
   const result: QueueRunResult = {
     mode,
     enqueued: 0,
