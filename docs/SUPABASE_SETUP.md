@@ -1,4 +1,4 @@
-# Supabase setup — Phases 1–8
+# Supabase setup — Phases 1–10
 
 This app uses Supabase Auth for admins and Postgres RLS for every exposed table. Phase 4 adds a server-only service-role client for unauthenticated sender invitation/OAuth callbacks. It can call only explicitly granted connection RPCs and must never reach browser code.
 
@@ -69,7 +69,10 @@ Authorization must remain in `raw_app_meta_data` / `app_metadata`. Never put rol
 - `recipients` has a unique constraint on `(campaign_id, email)`.
 - `email_queue.email_draft_id` is unique. Service-role-only queue RPCs use `FOR UPDATE SKIP LOCKED` and claim tokens; admins receive RLS-protected read access only.
 - Scheduled instants are stored as `timestamptz` (UTC) with the chosen IANA timezone stored separately.
-- Apply `20260809090305_phases_7_8.sql` before enabling the cron worker.
+- `campaigns.archived_at` is a permanent archive marker. Database triggers make archives read-only to normal authenticated admin mutations.
+- `manage_campaign_lifecycle` locks the campaign and determines deletion versus archive server-side. Sent/history/in-flight evidence forces archive; safe owned rows cascade only for never-sent deletion.
+- Enqueue and final preparation require a due, active, unpaused, non-archived campaign. Clearing a future schedule, deleting, or archiving removes eligibility.
+- Apply migrations through `20260809133035_phases_9_10_hardening.sql` before enabling the cron worker.
 
 ## 5. Optional local Supabase
 
@@ -77,7 +80,24 @@ Docker Desktop or another Docker-compatible runtime is required:
 
 ```bash
 npm exec supabase -- start
-npm exec supabase -- db reset
+npm exec supabase -- migration up --local
+npm run test:db
 ```
 
-`db reset` recreates the local database, applies migrations, and runs safe seed data. It is destructive to the local database; never point it at production.
+`migration up --local` applies pending migrations without recreating the local database. `db reset` is available when a clean local database is intentionally required, but it destroys local data before applying migrations and safe seed data; never point it at production.
+
+## 6. Pre-deployment database checks
+
+Run before deployment:
+
+```bash
+npm exec supabase -- db push --dry-run
+npm exec supabase -- migration list
+npm run test:db
+```
+
+The pgTAP suite covers authenticated-admin enforcement, metadata edits, pre-send reassignment, schedule edit/cancel/pause/resume, safe cascade deletion, mandatory archive with history, history preservation, and worker exclusion.
+
+After pushing migrations, run the hosted Supabase **Security Advisor** and **Performance Advisor**. Review every finding; do not weaken RLS or expose the `private` schema to silence an advisory. The service-role key bypasses RLS and belongs only in server-side deployment secrets.
+
+For deployment order and safe rollout, continue with [DEPLOYMENT.md](DEPLOYMENT.md).

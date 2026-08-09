@@ -23,7 +23,7 @@ export default async function EmailReviewPage({ params, searchParams }: EmailRev
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const supabase = await createSupabaseServerClient();
   const [campaignResult, countResult, generatedResult, approvedResult] = await Promise.all([
-    supabase.from("campaigns").select("id,name,city").eq("id", id).maybeSingle(),
+    supabase.from("campaigns").select("id,name,city,status,started_at,archived_at").eq("id", id).maybeSingle(),
     supabase.from("email_drafts").select("id", { count: "exact", head: true }).eq("campaign_id", id),
     supabase.from("email_drafts").select("id", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "GENERATED"),
     supabase.from("email_drafts").select("id", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "APPROVED"),
@@ -56,6 +56,9 @@ export default async function EmailReviewPage({ params, searchParams }: EmailRev
   const recipients = new Map((recipientResult.data ?? []).map((recipient) => [recipient.id, recipient]));
   const senders = new Map((senderResult.data ?? []).map((sender) => [sender.id, sender]));
   const notice = Array.isArray(query.notice) ? query.notice[0] : query.notice;
+  const campaignEditable = campaignResult.data.status !== "ARCHIVED"
+    && !campaignResult.data.archived_at
+    && !campaignResult.data.started_at;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -66,7 +69,7 @@ export default async function EmailReviewPage({ params, searchParams }: EmailRev
           <h1 className="mt-2 text-4xl font-[800] tracking-[-0.045em]">Review email previews</h1>
           <p className="mt-2 text-sm text-[#526873]">{campaignResult.data.name} · {campaignResult.data.city}</p>
         </div>
-        {(generatedResult.count ?? 0) > 0 ? (
+        {campaignEditable && (generatedResult.count ?? 0) > 0 ? (
           <form action={approveAllEmailPreviewsAction}>
             <input name="campaignId" type="hidden" value={id} />
             <button className="button-primary" type="submit">Approve all generated</button>
@@ -76,6 +79,12 @@ export default async function EmailReviewPage({ params, searchParams }: EmailRev
 
       {notice === "generated" ? (
         <p className="mt-5 rounded-lg border border-[#bfd8ca] bg-[#eef8f2] px-4 py-3 text-sm font-bold text-[#1f6e4c]">Email previews generated and stored. Gmail was not called.</p>
+      ) : null}
+
+      {!campaignEditable ? (
+        <p className="mt-5 rounded-lg border border-[#c8d4d0] bg-[#f4f7f6] px-4 py-3 text-sm font-bold text-[#526873]">
+          Read-only history. Email editing and approval are disabled after processing starts or when a campaign is archived.
+        </p>
       ) : null}
 
       <section className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -88,7 +97,7 @@ export default async function EmailReviewPage({ params, searchParams }: EmailRev
         {drafts?.map((draft) => {
           const recipient = recipients.get(draft.recipient_id);
           const sender = draft.sender_account_id ? senders.get(draft.sender_account_id) : null;
-          const editable = draft.status === "GENERATED";
+          const editable = campaignEditable && draft.status === "GENERATED";
           return (
             <article className="panel overflow-hidden" key={draft.id}>
               <div className="flex flex-col justify-between gap-3 border-b border-[#d4ddd9] bg-[#f8faf9] px-6 py-4 sm:flex-row sm:items-center">

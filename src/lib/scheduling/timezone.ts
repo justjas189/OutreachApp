@@ -1,5 +1,33 @@
 const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
+export const COMMON_TIME_ZONES = [
+  "Asia/Manila",
+  "UTC",
+  "America/Los_Angeles",
+  "America/New_York",
+  "Europe/London",
+  "Asia/Tokyo",
+] as const;
+
+const FALLBACK_TIME_ZONES = [
+  ...COMMON_TIME_ZONES,
+  "America/Chicago",
+  "America/Denver",
+  "America/Toronto",
+  "America/Vancouver",
+  "America/Sao_Paulo",
+  "Europe/Amsterdam",
+  "Europe/Berlin",
+  "Europe/Paris",
+  "Asia/Bangkok",
+  "Asia/Hong_Kong",
+  "Asia/Singapore",
+  "Asia/Seoul",
+  "Australia/Perth",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+] as const;
+
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number };
 
 function dateTimeFormatter(timeZone: string) {
@@ -21,6 +49,41 @@ export function isValidTimeZone(timeZone: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function getSupportedTimeZones(): string[] {
+  let runtimeZones: string[] = [];
+  try {
+    runtimeZones = Intl.supportedValuesOf("timeZone");
+  } catch {
+    runtimeZones = [];
+  }
+
+  const common = new Set<string>(COMMON_TIME_ZONES);
+  const allZones = new Set<string>(runtimeZones.length ? runtimeZones : FALLBACK_TIME_ZONES);
+  for (const zone of COMMON_TIME_ZONES) allZones.add(zone);
+
+  return [...allZones].sort((left, right) => {
+    const leftCommon = common.has(left);
+    const rightCommon = common.has(right);
+    if (leftCommon !== rightCommon) return leftCommon ? -1 : 1;
+    if (leftCommon && rightCommon) {
+      return COMMON_TIME_ZONES.indexOf(left as (typeof COMMON_TIME_ZONES)[number])
+        - COMMON_TIME_ZONES.indexOf(right as (typeof COMMON_TIME_ZONES)[number]);
+    }
+    return left.localeCompare(right);
+  });
+}
+
+export function isSelectableTimeZone(timeZone: string): boolean {
+  return getSupportedTimeZones().includes(timeZone) && isValidTimeZone(timeZone);
+}
+
+export function formatTimeZoneLabel(timeZone: string): string {
+  if (timeZone === "UTC") return "UTC (Coordinated Universal Time)";
+  const [region, ...location] = timeZone.split("/");
+  const friendlyLocation = location.join(" / ").replaceAll("_", " ");
+  return friendlyLocation ? `${friendlyLocation} — ${region.replaceAll("_", " ")}` : timeZone;
 }
 
 function parseLocalDateTime(value: string): LocalParts {

@@ -1,27 +1,30 @@
 # Rip City Outreach
 
-Production-minded Phase 1–8 outreach dashboard. Stack: Next.js App Router, TypeScript, Tailwind CSS, Supabase Auth/Postgres/RLS, Google Sheets API, Gmail API/Google OAuth, and Vitest.
+Production-minded outreach campaign dashboard built with Next.js App Router, TypeScript, Tailwind CSS, Supabase Auth/Postgres/RLS, Google Sheets API, Gmail API/Google OAuth, and Vitest.
 
-Implemented scope:
+Implemented through Phases 1–10:
 
-- admin email/password authentication with server-side route protection
-- explicit admin-only RLS and database schema/indexes
-- private server-side Google Sheets service-account access
-- Sheet URL or Spreadsheet ID parsing and worksheet selection
-- required-column validation, normalization, preview, duplicate removal, and atomic campaign import
-- safe local seed data using only `example.com`
-- expiring one-time sender invitations with hashed tokens
-- Google OAuth state + PKCE validation and encrypted refresh-token storage
-- connected-sender-only balanced campaign assignment
-- editable Business Type templates with validated variables
-- stored email preview generation, editing, regeneration, and `GENERATED → APPROVED` workflow
-- explicit UTC/IANA-timezone campaign scheduling with send-now, future edit/cancel, pause, and resume
-- database queue with unique enqueue keys, atomic `SKIP LOCKED` claims, capped retries, and safe logs
-- preview/draft/live enforcement, per-sender batches, and optional recipient allowlist
-- Gmail draft creation in draft mode and approved/queued sending in live mode
-- manual suppression management with generation/enqueue/pre-operation checks
+- admin email/password authentication with server-side route protection and admin-only RLS
+- private, server-only Google Sheets service-account import with schema validation, normalized preview, duplicate removal, and atomic campaign creation
+- expiring one-time sender invitations, hashed invite/OAuth state, PKCE, minimum `gmail.compose` access, and AES-256-GCM refresh-token encryption
+- connected-sender-only balanced assignment, editable Business Type templates, and deterministic stored email previews
+- `GENERATED → APPROVED → QUEUED → SENT/FAILED` workflow with editing and approval
+- preview/draft/live enforcement, optional recipient allowlist, per-sender batch limits, transient retries, safe logs, and suppression checks
+- database-backed scheduling and queue processing with UTC instants, IANA timezone context, atomic `SKIP LOCKED` claims, unique enqueue keys, and protected cron access
+- manual STOP / UNSUBSCRIBED / INVALID / MANUAL BLOCK suppression
+- complete campaign management: metadata edits, pre-send reassignment, schedule edit/cancel, pause/resume, active/history views, safe permanent deletion, and read-only archive preservation
+- database and application tests using only fake `example.com` data; automated tests never call real Google APIs
 
-Not implemented: Gmail inbox reading, automatic STOP detection, analytics/reporting expansion, or Phase 9–10 deployment documentation.
+Not implemented by design: Gmail inbox reading, automatic STOP detection, AI personalization, tracking, scraping, or provider-limit bypassing.
+
+## Campaign lifecycle
+
+The database—not the browser—decides the destructive action inside one locked transaction:
+
+- Never sent and no send/history records: permanently deletes the campaign and cascade-owned recipients, previews, assignments, schedules, and unsent queue records.
+- Any sent email, send/history record, or active queue claim: archives instead. It clears scheduling, cancels unclaimed queue work, preserves delivery history, and permanently excludes the campaign from new queue eligibility.
+
+Archived campaigns are hidden from the default `/campaigns` view, remain available under **Archived / History**, and are read-only through normal admin workflows.
 
 ## Run locally
 
@@ -31,24 +34,29 @@ Not implemented: Gmail inbox reading, automatic STOP detection, analytics/report
    npm install
    ```
 
-2. Copy `.env.example` to `.env.local` and add Supabase, Google service-account, Google OAuth, and token-encryption values.
-3. Apply the Supabase migration and create the first admin using [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
-4. Share the private Sheet using [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md).
+2. Copy `.env.example` to `.env.local`. Keep `EMAIL_MODE=preview`.
+3. Configure and migrate Supabase using [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
+4. Configure private Sheets and sender OAuth using [docs/GOOGLE_SETUP.md](docs/GOOGLE_SETUP.md).
 5. Start the app:
 
    ```bash
    npm run dev
    ```
 
-6. Open `http://localhost:3000`.
+6. Open `http://localhost:3000` and sign in as an admin.
 
 ## Verification
+
+With local Supabase running:
 
 ```bash
 npm run lint
 npm run typecheck
 npm run test:run
+npm run test:db
 npm run build
 ```
 
-`EMAIL_MODE` defaults to `preview`. The protected queue endpoint is `/api/cron/process-email-queue`; `vercel.json` invokes it every five minutes in production.
+`EMAIL_MODE` is fail-safe: missing or invalid values resolve to `preview`. Preview mode never enqueues or calls Gmail. The protected queue endpoint is `/api/cron/process-email-queue`; `vercel.json` invokes it every five minutes in production.
+
+For first deployment and safe preview → draft → live rollout, follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Security reporting and credential-response guidance are in [SECURITY.md](SECURITY.md).

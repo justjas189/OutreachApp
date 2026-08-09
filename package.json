@@ -10,7 +10,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:db": "supabase test db"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

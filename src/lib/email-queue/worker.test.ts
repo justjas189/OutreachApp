@@ -61,4 +61,13 @@ describe("email queue modes", () => {
     expect(gmail.sendMessage).not.toHaveBeenCalled();
     expect(repository.fail).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ code: "recipient_not_allowlisted", transient: false }));
   });
+
+  it("never calls Gmail when final database eligibility rejects a deleted or archived campaign", async () => {
+    const { repository, gmail } = dependencies("live");
+    repository.prepare = vi.fn(async () => null);
+    const result = await processEmailQueue({ mode: "live", repository, gmail, allowlist: null });
+    expect(result.skipped).toBe(1);
+    expect(gmail.sendMessage).not.toHaveBeenCalled();
+    expect(gmail.createDraft).not.toHaveBeenCalled();
+  });
 });

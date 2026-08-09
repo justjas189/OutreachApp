@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/admin";
 import { generateRecipientPreview, normalizeBusinessType } from "@/lib/email-previews/generator";
-import { localDateTimeToUtc } from "@/lib/scheduling/timezone";
+import { isSelectableTimeZone, localDateTimeToUtc } from "@/lib/scheduling/timezone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
 
@@ -17,18 +17,60 @@ const emailContentSchema = z.object({
   subject: z.string().trim().min(1).max(200).refine((value) => !/[\r\n]/.test(value)),
   body: z.string().min(1).max(50000),
 });
+const campaignDetailsSchema = z.object({
+  campaignId: z.uuid(),
+  name: z.string().trim().min(2).max(120),
+  city: z.string().trim().min(2).max(120),
+});
 const scheduleSchema = z.discriminatedUnion("scheduleMode", [
-  z.object({ scheduleMode: z.literal("now"), campaignId: z.uuid(), timezone: z.string().trim().min(1).max(100) }),
+  z.object({ scheduleMode: z.literal("now"), campaignId: z.uuid(), timezone: z.string().trim().refine(isSelectableTimeZone) }),
   z.object({
     scheduleMode: z.literal("later"),
     campaignId: z.uuid(),
-    timezone: z.string().trim().min(1).max(100),
+    timezone: z.string().trim().refine(isSelectableTimeZone),
     localDateTime: z.string().min(1),
   }),
 ]);
 
 function campaignLocation(campaignId: string, notice: string) {
   return `/campaigns/${campaignId}?notice=${notice}`;
+}
+
+export async function updateCampaignDetailsAction(formData: FormData) {
+  await requireAdmin();
+  const parsed = campaignDetailsSchema.safeParse({
+    campaignId: formData.get("campaignId"),
+    name: formData.get("name"),
+    city: formData.get("city"),
+  });
+  if (!parsed.success) redirect("/campaigns");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("update_campaign_details", {
+    p_campaign_id: parsed.data.campaignId,
+    p_name: parsed.data.name,
+    p_city: parsed.data.city,
+  });
+  revalidatePath("/campaigns");
+  revalidatePath(`/campaigns/${parsed.data.campaignId}`);
+  redirect(campaignLocation(parsed.data.campaignId, error || !data ? "edit-error" : "updated"));
+}
+
+export async function manageCampaignLifecycleAction(formData: FormData) {
+  await requireAdmin();
+  const campaignId = uuidSchema.safeParse(formData.get("campaignId"));
+  if (!campaignId.success) redirect("/campaigns");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("manage_campaign_lifecycle", {
+    p_campaign_id: campaignId.data,
+  });
+  if (error || !data) redirect(campaignLocation(campaignId.data, "lifecycle-error"));
+
+  revalidatePath("/campaigns");
+  if (data === "DELETED") redirect("/campaigns?notice=deleted");
+  revalidatePath(`/campaigns/${campaignId.data}`);
+  redirect(campaignLocation(campaignId.data, "archived"));
 }
 
 export async function assignCampaignSendersAction(formData: FormData) {
@@ -192,7 +234,12 @@ export async function saveEmailPreviewAction(formData: FormData) {
   if (!parsed.success) return;
 
   const supabase = await createSupabaseServerClient();
-  await supabase.from("email_drafts").update({ subject: parsed.data.subject, body: parsed.data.body }).eq("id", parsed.data.draftId).eq("status", "GENERATED");
+  await supabase
+    .from("email_drafts")
+    .update({ subject: parsed.data.subject, body: parsed.data.body })
+    .eq("id", parsed.data.draftId)
+    .eq("campaign_id", parsed.data.campaignId)
+    .eq("status", "GENERATED");
   revalidatePath(`/campaigns/${parsed.data.campaignId}/emails`);
 }
 

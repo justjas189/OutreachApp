@@ -14,6 +14,7 @@ export type CampaignRow = {
   scheduled_at: string | null;
   schedule_timezone: string | null;
   paused_at: string | null;
+  archived_at: string | null;
 };
 
 export type RecipientRow = {
@@ -105,6 +106,17 @@ export type EmailQueueRow = {
   updated_at: string;
 };
 
+export type SendLogRow = {
+  id: number;
+  campaign_id: string;
+  recipient_id: string;
+  sender_account_id: string | null;
+  status: "QUEUED" | "DRAFTED" | "SENT" | "RETRY" | "FAILED" | "SUPPRESSED" | "SKIPPED";
+  provider_message_id: string | null;
+  error_message: string | null;
+  created_at: string;
+};
+
 type TableDefinition<Row, Insert, Update> = {
   Row: Row;
   Insert: Insert;
@@ -166,6 +178,11 @@ export type Database = {
         Partial<SuppressionRow>
       >;
       email_queue: TableDefinition<EmailQueueRow, never, never>;
+      send_logs: TableDefinition<
+        SendLogRow,
+        Partial<SendLogRow> & Pick<SendLogRow, "campaign_id" | "recipient_id" | "status">,
+        Partial<SendLogRow>
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -226,6 +243,14 @@ export type Database = {
       assign_campaign_senders: {
         Args: { p_campaign_id: string; p_sender_ids: string[] };
         Returns: number;
+      };
+      update_campaign_details: {
+        Args: { p_campaign_id: string; p_name: string; p_city: string };
+        Returns: boolean;
+      };
+      manage_campaign_lifecycle: {
+        Args: { p_campaign_id: string };
+        Returns: "DELETED" | "ARCHIVED";
       };
       store_generated_email_previews: {
         Args: { p_campaign_id: string; p_drafts: Json };

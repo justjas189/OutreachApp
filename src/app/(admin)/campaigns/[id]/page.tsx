@@ -2,18 +2,28 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { TimezoneSelect } from "@/components/timezone-select";
+import { decideCampaignDisposition } from "@/lib/campaigns/lifecycle";
 import { getPagination } from "@/lib/pagination";
 import { getEmailMode } from "@/lib/env";
-import { formatForDateTimeLocal, formatInTimeZone } from "@/lib/scheduling/timezone";
+import {
+  formatForDateTimeLocal,
+  formatInTimeZone,
+  formatTimeZoneLabel,
+  getSupportedTimeZones,
+} from "@/lib/scheduling/timezone";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
   assignCampaignSendersAction,
   cancelCampaignScheduleAction,
   generateCampaignPreviewsAction,
+  manageCampaignLifecycleAction,
   pauseCampaignAction,
   resumeCampaignAction,
   scheduleCampaignAction,
+  updateCampaignDetailsAction,
 } from "./actions";
 
 export const metadata: Metadata = { title: "Campaign details" };
@@ -54,10 +64,11 @@ export default async function CampaignDetailPage({
     approvedCountResult,
     recipientStatusesResult,
     queueResult,
+    sendLogResult,
   ] = await Promise.all([
     supabase
       .from("campaigns")
-      .select("id,name,city,status,created_at,google_sheet_id,worksheet_name,started_at,completed_at,scheduled_at,schedule_timezone,paused_at")
+      .select("id,name,city,status,created_at,google_sheet_id,worksheet_name,started_at,completed_at,scheduled_at,schedule_timezone,paused_at,archived_at")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -83,8 +94,14 @@ export default async function CampaignDetailPage({
       .select("id", { count: "exact", head: true })
       .eq("campaign_id", id)
       .eq("status", "APPROVED"),
-    supabase.from("recipients").select("status").eq("campaign_id", id),
+    supabase.from("recipients").select("status,assigned_sender_id").eq("campaign_id", id),
     supabase.from("email_queue").select("status,delivery_mode,attempts,max_attempts").eq("campaign_id", id),
+    supabase
+      .from("send_logs")
+      .select("id,status,provider_message_id,error_message,created_at,sender_account_id,recipient_id", { count: "exact" })
+      .eq("campaign_id", id)
+      .order("created_at", { ascending: false })
+      .limit(10),
   ]);
 
   if (
@@ -96,6 +113,7 @@ export default async function CampaignDetailPage({
     approvedCountResult.error
     || recipientStatusesResult.error
     || queueResult.error
+    || sendLogResult.error
   ) {
     throw new Error("Campaign details could not be loaded from Supabase.");
   }
@@ -119,6 +137,7 @@ export default async function CampaignDetailPage({
   }
 
   const campaign = campaignResult.data;
+  const archived = campaign.status === "ARCHIVED" || Boolean(campaign.archived_at);
   const createdAt = new Intl.DateTimeFormat("en-US", {
     dateStyle: "long",
     timeStyle: "short",
@@ -140,6 +159,10 @@ export default async function CampaignDetailPage({
     resumed: { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign resumed. Processing continues only when its schedule is due." },
     "schedule-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Schedule date, time, or timezone is invalid or ambiguous." },
     "schedule-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Schedule change was rejected. Approve email first; future schedules lock when processing starts." },
+    updated: { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign details updated." },
+    "edit-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Campaign details could not be updated. City locks after previews; all details lock after sending starts." },
+    archived: { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign archived. History is preserved and no future queue work can run." },
+    "lifecycle-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Campaign deletion/archive was rejected by the database lifecycle rules." },
   };
   const currentNotice = notice ? noticeMessages[notice] : undefined;
   const recipientStatusCounts = new Map<string, number>();
@@ -152,11 +175,34 @@ export default async function CampaignDetailPage({
   }
   const scheduleTimezone = campaign.schedule_timezone ?? "UTC";
   const futureSchedule = Boolean(campaign.scheduled_at && campaign.status === "READY" && !campaign.started_at);
-  const scheduleEditable = !campaign.started_at && (queueResult.data?.length ?? 0) === 0;
+  const scheduleEditable = !archived && !campaign.started_at && (queueResult.data?.length ?? 0) === 0;
   const scheduleInputValue = campaign.scheduled_at && campaign.schedule_timezone
     ? formatForDateTimeLocal(campaign.scheduled_at, campaign.schedule_timezone)
     : "";
   const emailMode = getEmailMode();
+  const sentEmailCount = recipientStatusCounts.get("SENT") ?? 0;
+  const processingQueueCount = queueStatusCounts.get("PROCESSING") ?? 0;
+  const disposition = decideCampaignDisposition({
+    sentEmails: sentEmailCount,
+    historyRecords: sendLogResult.count ?? 0,
+    processingQueueItems: processingQueueCount,
+  });
+  const assignmentEditable = !archived
+    && !campaign.started_at
+    && (queueResult.data?.length ?? 0) === 0
+    && (sendLogResult.count ?? 0) === 0;
+  const detailsEditable = !archived && !campaign.started_at && (sendLogResult.count ?? 0) === 0;
+  const cityEditable = detailsEditable && (draftCountResult.count ?? 0) === 0;
+  const workflowEditable = !archived && !campaign.started_at && (queueResult.data?.length ?? 0) === 0;
+  const assignedSenderIds = new Set(
+    (recipientStatusesResult.data ?? [])
+      .map((recipient) => recipient.assigned_sender_id)
+      .filter((senderId): senderId is string => Boolean(senderId)),
+  );
+  const timezoneOptions = getSupportedTimeZones().map((zone) => ({
+    label: formatTimeZoneLabel(zone),
+    value: zone,
+  }));
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -214,18 +260,58 @@ export default async function CampaignDetailPage({
         </p>
       ) : null}
 
+      {archived ? (
+        <div className="mt-5 rounded-lg border border-[#c8d4d0] bg-[#f4f7f6] px-5 py-4">
+          <p className="font-extrabold">Archived history · read-only</p>
+          <p className="mt-1 text-sm text-[#526873]">
+            Recipient, preview, sender, queue, and delivery records remain available for audit. Scheduling and processing are permanently disabled.
+          </p>
+        </div>
+      ) : null}
+
+      <section className="panel mt-8 p-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Campaign metadata</p>
+            <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Edit campaign details</h2>
+          </div>
+          {!cityEditable && detailsEditable ? (
+            <span className="mono rounded-full bg-[#fff0d6] px-2.5 py-1 text-[0.62rem] font-bold text-[#805516]">City locked after preview</span>
+          ) : null}
+        </div>
+        {detailsEditable ? (
+          <form action={updateCampaignDetailsAction} className="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <input name="campaignId" type="hidden" value={id} />
+            <label className="text-sm font-bold">Campaign name
+              <input className="field mt-2" defaultValue={campaign.name} maxLength={120} minLength={2} name="name" required />
+            </label>
+            <label className="text-sm font-bold">City
+              <input className="field mt-2 read-only:bg-[#eef2f1]" defaultValue={campaign.city} maxLength={120} minLength={2} name="city" readOnly={!cityEditable} required />
+            </label>
+            <button className="button-primary" type="submit">Save details</button>
+          </form>
+        ) : (
+          <p className="mt-4 text-sm text-[#607580]">Details are locked because this campaign is archived or sending history has started.</p>
+        )}
+      </section>
+
       <section className="mt-8 grid gap-5 lg:grid-cols-2">
         <article className="panel p-6">
           <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Sender assignment</p>
           <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Balance connected senders</h2>
-          {(draftCountResult.count ?? 0) > 0 ? (
-            <p className="mt-3 text-sm text-[#607580]">Assignment locked because stored previews already exist.</p>
+          {!assignmentEditable ? (
+            <p className="mt-3 text-sm text-[#607580]">Assignment is locked after queue processing starts or when the campaign is archived.</p>
           ) : connectedSenderResult.data?.length ? (
             <form action={assignCampaignSendersAction} className="mt-5 space-y-3">
               <input name="campaignId" type="hidden" value={id} />
               {connectedSenderResult.data.map((sender) => (
                 <label className="flex items-center gap-3 rounded-lg border border-[#d4ddd9] px-4 py-3 text-sm" key={sender.id}>
-                  <input defaultChecked name="senderId" type="checkbox" value={sender.id} />
+                  <input
+                    defaultChecked={assignedSenderIds.size === 0 || assignedSenderIds.has(sender.id)}
+                    name="senderId"
+                    type="checkbox"
+                    value={sender.id}
+                  />
                   <span><strong>{sender.display_name}</strong><span className="mono ml-2 text-xs text-[#607580]">{sender.email}</span></span>
                 </label>
               ))}
@@ -246,10 +332,12 @@ export default async function CampaignDetailPage({
           </div>
           <p className="mt-4 text-xs leading-5 text-[#607580]">Generation uses deterministic templates and stores database previews only. It never creates Gmail drafts or sends mail.</p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <form action={generateCampaignPreviewsAction}>
-              <input name="campaignId" type="hidden" value={id} />
-              <button className="button-primary" type="submit">Generate previews</button>
-            </form>
+            {workflowEditable ? (
+              <form action={generateCampaignPreviewsAction}>
+                <input name="campaignId" type="hidden" value={id} />
+                <button className="button-primary" type="submit">Generate previews</button>
+              </form>
+            ) : null}
             <Link className="rounded-md border border-[#c8d4d0] px-4 py-2 text-sm font-bold" href={`/campaigns/${id}/emails`}>Review emails</Link>
           </div>
         </article>
@@ -285,29 +373,39 @@ export default async function CampaignDetailPage({
             <label className="text-sm font-bold">Local date and time
               <input className="field mt-2" defaultValue={scheduleInputValue} name="localDateTime" type="datetime-local" />
             </label>
-            <label className="text-sm font-bold">Timezone
-              <input className="field mt-2" defaultValue={scheduleTimezone} list="campaign-timezones" name="timezone" required />
-              <datalist id="campaign-timezones">
-                {['UTC', 'Asia/Manila', 'America/Los_Angeles', 'America/New_York', 'Europe/London', 'Australia/Sydney'].map((zone) => <option key={zone} value={zone} />)}
-              </datalist>
-            </label>
+            <TimezoneSelect
+              initialValue={campaign.schedule_timezone}
+              options={timezoneOptions}
+            />
             <button className="button-primary" type="submit">Save schedule</button>
           </form>
         ) : (
-          <p className="mt-5 text-sm text-[#607580]">Schedule editing is locked because queue processing has started.</p>
+          <p className="mt-5 text-sm text-[#607580]">
+            {archived ? "Archived campaigns cannot be scheduled or processed." : "Schedule editing is locked because queue processing has started."}
+          </p>
         )}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {futureSchedule ? (
             <form action={cancelCampaignScheduleAction}>
               <input name="campaignId" type="hidden" value={id} />
-              <button className="rounded-md border border-[#c8d4d0] px-4 py-2 text-sm font-bold" type="submit">Cancel future schedule</button>
+              <ConfirmSubmitButton
+                className="rounded-md border border-[#c8d4d0] px-4 py-2 text-sm font-bold"
+                confirmation="Cancel this future schedule? No email will be queued until a new start time is saved."
+              >
+                Cancel future schedule
+              </ConfirmSubmitButton>
             </form>
           ) : null}
           {campaign.scheduled_at && campaign.status !== "PAUSED" && campaign.status !== "COMPLETED" ? (
             <form action={pauseCampaignAction}>
               <input name="campaignId" type="hidden" value={id} />
-              <button className="rounded-md border border-[#e4b76b] px-4 py-2 text-sm font-bold text-[#805516]" type="submit">Pause campaign</button>
+              <ConfirmSubmitButton
+                className="rounded-md border border-[#e4b76b] px-4 py-2 text-sm font-bold text-[#805516]"
+                confirmation="Pause this campaign? Future queue claims will stop until you resume it."
+              >
+                Pause campaign
+              </ConfirmSubmitButton>
             </form>
           ) : null}
           {campaign.status === "PAUSED" ? (
@@ -332,6 +430,66 @@ export default async function CampaignDetailPage({
           ))}
         </div>
       </section>
+
+      <section className="panel mt-8 overflow-hidden">
+        <div className="border-b border-[#d4ddd9] px-6 py-5">
+          <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Audit trail</p>
+          <h2 className="mt-1 text-2xl font-[780] tracking-[-0.035em]">Recent delivery history</h2>
+          <p className="mt-2 text-sm text-[#607580]">{sendLogResult.count ?? 0} total history records</p>
+        </div>
+        {sendLogResult.data?.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[46rem] border-collapse text-left text-sm">
+              <thead className="bg-[#eaf0f2]">
+                <tr className="mono text-[0.65rem] uppercase tracking-[0.1em] text-[#536d79]">
+                  <th className="px-5 py-3">Time</th>
+                  <th className="px-5 py-3">Result</th>
+                  <th className="px-5 py-3">Provider ID</th>
+                  <th className="px-5 py-3">Safe detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sendLogResult.data.map((entry) => (
+                  <tr className="border-t border-[#dce4e1]" key={entry.id}>
+                    <td className="px-5 py-4 text-[#526873]">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(entry.created_at))}</td>
+                    <td className="px-5 py-4"><span className="mono rounded-full bg-[#e5edf2] px-2 py-1 text-[0.65rem] font-bold">{entry.status}</span></td>
+                    <td className="mono max-w-56 truncate px-5 py-4 text-xs">{entry.provider_message_id ?? "—"}</td>
+                    <td className="max-w-80 truncate px-5 py-4 text-[#526873]" title={entry.error_message ?? undefined}>{entry.error_message ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-6 py-10 text-sm text-[#607580]">No queue or delivery history yet.</div>
+        )}
+      </section>
+
+      {!archived ? (
+        <section className="mt-8 rounded-xl border border-red-200 bg-red-50 p-6">
+          <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-red-700">Campaign lifecycle</p>
+          <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">
+            {disposition === "DELETE" ? "Permanently delete campaign" : "Archive campaign history"}
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-red-900/75">
+            {disposition === "DELETE"
+              ? "No sent or history records exist. The database may permanently remove this campaign, recipients, previews, schedules, sender assignments, and unsent queue work."
+              : "Sent, history, or in-flight records make hard deletion unsafe. The database will preserve audit history, cancel future work, and make the campaign read-only."}
+          </p>
+          <form action={manageCampaignLifecycleAction} className="mt-5">
+            <input name="campaignId" type="hidden" value={id} />
+            <ConfirmSubmitButton
+              className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-extrabold text-red-800 hover:bg-red-100"
+              confirmation={disposition === "DELETE"
+                ? `Permanently delete “${campaign.name}” and all safe unsent records? This cannot be undone.`
+                : `Archive “${campaign.name}”? Future schedules and unsent queue work will be cancelled.`}
+            >
+              {disposition === "DELETE" ? "Delete permanently" : "Archive campaign"}
+            </ConfirmSubmitButton>
+          </form>
+          <p className="mt-3 text-xs text-red-900/65">Final eligibility is recalculated inside one locked database transaction. The browser does not choose delete versus archive.</p>
+        </section>
+      ) : null}
 
       <section className="panel mt-8 overflow-hidden">
         <div className="flex items-end justify-between gap-4 border-b border-[#d4ddd9] px-5 py-5 sm:px-6">

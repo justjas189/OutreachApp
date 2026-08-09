@@ -1,4 +1,4 @@
-# Google Sheets and Gmail OAuth setup — Phases 3–8
+# Google Sheets and Gmail OAuth setup — Phases 3–10
 
 Google Sheets uses a dedicated service account. Gmail sender accounts use separate per-user OAuth authorization. Sender accounts must never receive Google Sheet, dashboard, campaign, recipient, template, database, or source-code access.
 
@@ -84,6 +84,8 @@ APP_URL=http://localhost:3000
 
 Production `GOOGLE_OAUTH_REDIRECT_URI` and `APP_URL` must use the deployed HTTPS origin.
 
+For Vercel Preview OAuth testing, use a stable preview/custom domain and register its exact callback URI separately. Do not assume Google will accept wildcard deployment URLs. Production sender authorization should use the final production callback.
+
 ## 7. Configure token encryption
 
 Generate a unique 32-byte key once:
@@ -103,3 +105,16 @@ Store output as server-only `TOKEN_ENCRYPTION_KEY`. Never rotate it without firs
 5. Confirm dashboard shows sender as `CONNECTED`.
 
 Flow uses expiring one-time invitation tokens, hashed OAuth state, an HttpOnly SameSite cookie, PKCE, verified Google ID token, and AES-256-GCM encrypted refresh-token storage. Access and refresh tokens are never returned to browser or logged. Phase 7 uses the same `gmail.compose` authorization server-side: `draft` creates Gmail drafts only, `live` sends eligible queue items, and `preview` calls neither operation.
+
+## 9. Production safety checklist
+
+- Keep OAuth in testing until branding, test users, scopes, and verification requirements are complete.
+- Keep `EMAIL_MODE=preview` for the first Vercel deployment.
+- Before draft/live, configure `TEST_RECIPIENT_ALLOWLIST` with addresses you control.
+- Start draft testing with one fake `example.com` campaign and verify Gmail drafts are created but not sent.
+- Start live testing with `EMAIL_BATCH_SIZE=1` and one allowlisted address you control.
+- Never share the private Sheet with sender Gmail accounts. Only the dedicated service account is a Sheet viewer.
+- Never upload the downloaded JSON key to the repository or Vercel as a file. Copy only its `client_email` and `private_key` into encrypted server-side environment variables, then secure/delete loose downloads according to your key-management policy.
+- Revoke and rotate any credential suspected of exposure. Refresh-token ciphertext cannot be decrypted after an unplanned `TOKEN_ENCRYPTION_KEY` rotation; reconnect senders or perform a planned re-encryption migration.
+
+Continue with [DEPLOYMENT.md](DEPLOYMENT.md) for exact Vercel environment, cron, preview/draft/live rollout, and rollback steps.
