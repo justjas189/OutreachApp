@@ -24,7 +24,7 @@ type QuickRunPanelProps = {
 
 export function QuickRunPanel({ campaigns, deliveryMode, batchSize, timezoneOptions }: QuickRunPanelProps) {
   const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
-  const [scheduleMode, setScheduleMode] = useState<"now" | "later">("now");
+  const [executionType, setExecutionType] = useState<"now" | "schedule">("now");
   const selected = useMemo(
     () => campaigns.find((campaign) => campaign.id === campaignId) ?? campaigns[0],
     [campaignId, campaigns],
@@ -39,7 +39,7 @@ export function QuickRunPanel({ campaigns, deliveryMode, batchSize, timezoneOpti
   }
 
   const readiness = selected.readiness;
-  const scheduleLabel = scheduleMode === "now" ? "Now" : "Selected date and time";
+  const scheduleLabel = executionType === "now" ? "Now" : "Selected date and time";
   const confirmation = `${deliveryMode === "live" ? "REAL EMAILS WILL BE SENT.\n\n" : ""}Ready to run\n\nCampaign: ${selected.name}\nMode: ${deliveryMode}\nApproved: ${readiness.approvedCount}\nSenders: ${readiness.connectedSenderCount}\nBatch size: ${batchSize} per sender\nSuppressed: ${readiness.suppressedCount}\nSchedule: ${scheduleLabel}`;
 
   return (
@@ -77,26 +77,26 @@ export function QuickRunPanel({ campaigns, deliveryMode, batchSize, timezoneOpti
         <legend className="text-sm font-bold">Start</legend>
         <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-[#eef4f7] p-1.5">
           <button
-            aria-pressed={scheduleMode === "now"}
-            className={`rounded-lg px-4 py-2.5 text-sm font-bold ${scheduleMode === "now" ? "bg-white text-[#17456f] shadow-sm" : "text-[#526873]"}`}
-            onClick={() => setScheduleMode("now")}
+            aria-pressed={executionType === "now"}
+            className={`rounded-lg px-4 py-2.5 text-sm font-bold ${executionType === "now" ? "bg-white text-[#17456f] shadow-sm" : "text-[#526873]"}`}
+            onClick={() => setExecutionType("now")}
             type="button"
           >
             Run now
           </button>
           <button
-            aria-pressed={scheduleMode === "later"}
-            className={`rounded-lg px-4 py-2.5 text-sm font-bold ${scheduleMode === "later" ? "bg-white text-[#17456f] shadow-sm" : "text-[#526873]"}`}
-            onClick={() => setScheduleMode("later")}
+            aria-pressed={executionType === "schedule"}
+            className={`rounded-lg px-4 py-2.5 text-sm font-bold ${executionType === "schedule" ? "bg-white text-[#17456f] shadow-sm" : "text-[#526873]"}`}
+            onClick={() => setExecutionType("schedule")}
             type="button"
           >
             Schedule
           </button>
         </div>
       </fieldset>
-      <input name="scheduleMode" type="hidden" value={scheduleMode} />
+      <input name="executionType" type="hidden" value={executionType} />
 
-      {scheduleMode === "later" ? (
+      {executionType === "schedule" ? (
         <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
           <label className="text-sm font-bold">
             Local date and time
@@ -104,9 +104,7 @@ export function QuickRunPanel({ campaigns, deliveryMode, batchSize, timezoneOpti
           </label>
           <TimezoneSelect initialValue={null} options={timezoneOptions} />
         </div>
-      ) : (
-        <TimezoneSelect initialValue={null} options={timezoneOptions} />
-      )}
+      ) : null}
 
       <div className={`rounded-lg border px-4 py-3 text-sm ${deliveryMode === "live" ? "border-red-300 bg-red-50 text-red-900" : "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]"}`}>
         <strong className="uppercase">{deliveryMode} mode</strong>
@@ -122,7 +120,7 @@ export function QuickRunPanel({ campaigns, deliveryMode, batchSize, timezoneOpti
           : "button-primary min-h-12"}
         confirmation={confirmation}
       >
-        {scheduleMode === "now" ? "Run campaign" : "Schedule campaign"}
+        {executionType === "now" ? "Run campaign" : "Schedule campaign"}
       </ConfirmSubmitButton>
     </form>
   );

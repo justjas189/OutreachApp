@@ -32,7 +32,14 @@ const noticeMessages: Record<string, { tone: string; message: string }> = {
   "quick-run-started": { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign start saved. Server worker will process eligible work." },
   "quick-run-scheduled": { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign schedule saved server-side." },
   "quick-run-blocked": { tone: "border-[#f1d6a6] bg-[#fff8e8] text-[#805516]", message: "Quick Run rejected because campaign readiness changed or processing already started." },
-  "quick-run-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Quick Run date, time, timezone, or campaign selection is invalid." },
+  "quick-run-campaign-missing": { tone: "border-red-200 bg-red-50 text-red-800", message: "Campaign selection was not submitted." },
+  "quick-run-campaign-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Campaign selection is invalid." },
+  "quick-run-execution-type-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Execution type is invalid." },
+  "quick-run-datetime-required": { tone: "border-red-200 bg-red-50 text-red-800", message: "Scheduled date and time are required." },
+  "quick-run-timezone-missing": { tone: "border-red-200 bg-red-50 text-red-800", message: "Timezone was not submitted." },
+  "quick-run-timezone-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Selected timezone is not a valid IANA timezone." },
+  "quick-run-scheduled-time-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Scheduled date and time is invalid, nonexistent, or ambiguous in that timezone." },
+  "quick-run-scheduled-time-past": { tone: "border-red-200 bg-red-50 text-red-800", message: "Scheduled time must be in the future." },
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
