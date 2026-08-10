@@ -4,6 +4,7 @@ import { BatchSizeControl } from "@/components/batch-size-control";
 import { DeliveryModeControl } from "@/components/delivery-mode-control";
 import { QuickRunPanel } from "@/components/quick-run-panel";
 import { requireAdmin } from "@/lib/auth/admin";
+import { getRecipientGuardMode } from "@/lib/env";
 import {
   parseCampaignReadiness,
   readinessAction,
@@ -96,6 +97,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }));
   const notice = Array.isArray(query.notice) ? query.notice[0] : query.notice;
   const currentNotice = notice ? noticeMessages[notice] : undefined;
+  const recipientGuardMode = getRecipientGuardMode();
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -182,6 +184,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ))}
           </div>
         </article>
+      </section>
+
+      <section
+        aria-label="Recipient safety"
+        className={`panel mt-8 border-2 p-6 sm:p-7 ${recipientGuardMode === "production" ? "border-red-300 bg-red-50/40" : "border-[#bfd8ca]"}`}
+      >
+        <p className="mono text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#607580]">Recipient Safety</p>
+        <h2 className={`mt-2 text-2xl font-[780] tracking-[-0.035em] ${recipientGuardMode === "production" ? "text-red-800" : "text-[#1f6e4c]"}`}>
+          {recipientGuardMode === "production" ? "PRODUCTION RECIPIENTS" : "TEST ALLOWLIST"}
+        </h2>
+        <p className="mt-2 text-sm text-[#526873]">
+          {recipientGuardMode === "production"
+            ? "Approved campaign recipients may receive email. All approval, suppression, sender, schedule, lifecycle, locking, and delivery-mode checks remain active."
+            : "Only addresses configured in TEST_RECIPIENT_ALLOWLIST can reach Gmail. Missing or invalid guard configuration stays in this fail-closed mode."}
+        </p>
+        <p className="mt-3 text-xs font-bold text-[#607580]">
+          Deployment environment controls this setting; dashboard requests cannot enable production recipients.
+        </p>
       </section>
 
       <section className="panel mt-8 p-6 sm:p-7">

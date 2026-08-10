@@ -29,6 +29,7 @@ const googleOAuthSchema = z.object({
 const appUrlSchema = z.url();
 
 export type EmailMode = "preview" | "draft" | "live";
+export type RecipientGuardMode = "allowlist" | "production";
 
 export function getSupabaseConfig() {
   const parsed = supabaseSchema.safeParse(process.env);
@@ -130,6 +131,15 @@ export function parseTestRecipientAllowlist(value: string | undefined): Set<stri
 
 export function getTestRecipientAllowlist(): Set<string> | null {
   return parseTestRecipientAllowlist(process.env.TEST_RECIPIENT_ALLOWLIST);
+}
+
+export function parseRecipientGuardMode(value: string | undefined): RecipientGuardMode {
+  const parsed = z.enum(["allowlist", "production"]).safeParse(value);
+  return parsed.success ? parsed.data : "allowlist";
+}
+
+export function getRecipientGuardMode(): RecipientGuardMode {
+  return parseRecipientGuardMode(process.env.RECIPIENT_GUARD_MODE);
 }
 
 export function getCronSecret(): string {

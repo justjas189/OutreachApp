@@ -58,6 +58,7 @@ EMAIL_MODE=preview
 # Environment fallback. Dashboard runtime value remains bounded to 1-50.
 # Limit applies per connected sender per worker execution.
 EMAIL_BATCH_SIZE=5
+RECIPIENT_GUARD_MODE=allowlist
 TEST_RECIPIENT_ALLOWLIST=you@example.com
 CRON_SECRET=YOUR_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
 
@@ -69,6 +70,7 @@ Important:
 - `APP_URL` and `GOOGLE_OAUTH_REDIRECT_URI` must use the same intended HTTPS origin.
 - Add the exact callback URI to the Google OAuth web client. Google does not accept an arbitrary preview-domain wildcard; add an exact stable preview callback only if sender OAuth must be tested there.
 - Environment changes apply only to new deployments, so redeploy after changing a value.
+- `RECIPIENT_GUARD_MODE` is deployment authority. Missing/invalid values fail closed to `allowlist`; an empty allowlist permits no Gmail recipient. There is no client/admin request that can raise it to `production`.
 - Keep the token-encryption key stable. Changing it without re-encrypting existing refresh tokens disconnects stored sender credentials.
 - Use a separate Supabase project and separate encryption/cron secrets for non-production when possible.
 
@@ -128,11 +130,12 @@ npm run test:db
 1. **Preview:** Keep `EMAIL_MODE=preview`. Runtime setting starts in Preview. Use fake `example.com` Sheet rows, import, assign senders, generate/edit/approve, test schedule edit/cancel/pause/resume, and confirm the worker reports zero queue/Gmail work.
 2. **Archive/delete:** Delete a never-sent fake campaign; archive a campaign containing a safe fake history record. Confirm active/history filters and cancelled queue state.
 3. **OAuth:** Keep Google OAuth in testing and authorize only designated test Gmail accounts. Sender accounts receive only their one-time connection URLs and never Sheet/dashboard access.
-4. **Draft:** Set `TEST_RECIPIENT_ALLOWLIST` to addresses you control, change the deployment ceiling to `EMAIL_MODE=draft`, redeploy, then select Draft in the authenticated dashboard. Schedule one approved email and confirm Gmail creates a draft but sends nothing.
+4. **Draft:** Keep `RECIPIENT_GUARD_MODE=allowlist`, set `TEST_RECIPIENT_ALLOWLIST` to addresses you control, change the deployment ceiling to `EMAIL_MODE=draft`, redeploy, then select Draft in the authenticated dashboard. Schedule one approved email and confirm Gmail creates a draft but sends nothing.
 5. **Live ceiling:** Keep runtime mode in Draft, keep the allowlist, set the dashboard runtime batch size to `1`, change the deployment ceiling to `EMAIL_MODE=live`, and redeploy. This ceiling change alone does not change the database runtime mode.
 6. **Live canary:** In the dashboard, select Live and accept the explicit real-email confirmation. Quick Run one approved message to an address you control. Confirm exactly one send log and no duplicate queue/send.
 7. **Observe:** Check campaign audit history, Gmail result, suppression behavior, cron logs, and Supabase logs/advisors. Return to preview immediately if anything is unexpected.
-8. **Expand slowly:** Increase the batch size only within provider limits. Remove or expand the allowlist only after legal/compliance review and a successful controlled canary. The app does not bypass Gmail limits.
+8. **Production-recipient confirmation:** After legal/compliance review and a successful controlled canary, require an operator to confirm: `I understand approved campaign recipients may receive email.` Then explicitly set `RECIPIENT_GUARD_MODE=production` and redeploy. This removes only the test-recipient restriction.
+9. **Expand slowly:** Increase the batch size only within provider limits. Approval, suppression, sender eligibility, schedules, lifecycle, locking, retries, delivery mode, and duplicate-send protection remain active. The app does not bypass Gmail limits.
 
 Dashboard batch-size changes take effect on the next worker execution without a restart. Live increases of five or more require explicit confirmation and are audited with actor, previous value, new value, and timestamp.
 

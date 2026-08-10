@@ -9,7 +9,7 @@ Implemented through Phases 1–10:
 - expiring one-time sender invitations, hashed invite/OAuth state, PKCE, minimum `gmail.compose` access, and AES-256-GCM refresh-token encryption
 - connected-sender-only balanced assignment, editable Business Type templates, and deterministic stored email previews
 - `GENERATED → APPROVED → QUEUED → SENT/FAILED` workflow with editing and approval
-- preview/draft/live enforcement, optional recipient allowlist, per-sender batch limits, transient retries, safe logs, and suppression checks
+- preview/draft/live enforcement, fail-closed recipient guard, per-sender batch limits, transient retries, safe logs, and suppression checks
 - database-backed scheduling and queue processing with UTC instants, IANA timezone context, atomic `SKIP LOCKED` claims, unique enqueue keys, and protected cron access
 - manual STOP / UNSUBSCRIBED / INVALID / MANUAL BLOCK suppression
 - complete campaign management: metadata edits, pre-send reassignment, schedule edit/cancel, pause/resume, active/history views, safe permanent deletion, and read-only archive preservation
@@ -60,6 +60,8 @@ npm run build
 `EMAIL_MODE` is fail-safe: missing or invalid values resolve to `preview`. It is now the deployment ceiling/fallback; authenticated admins choose the runtime mode from the dashboard, but cannot exceed that ceiling. Database lookup errors fail closed to preview. Preview mode never enqueues or calls Gmail. The protected queue endpoint is `/api/cron/process-email-queue`; `vercel.json` invokes it every five minutes in production.
 
 `EMAIL_BATCH_SIZE` remains the safe environment fallback and defaults to `5` when missing or invalid. Authenticated admins can select the active runtime value from `1` through `50` without restarting the app. Existing queue semantics are unchanged: the value limits claims **per connected sender per worker execution**, so total claimed work can be the value multiplied by the number of eligible connected senders. Provider limits, atomic claims, suppression, allowlist, retry, schedule, lifecycle, and duplicate-send checks still apply.
+
+`RECIPIENT_GUARD_MODE` is server-only deployment authority. Missing or invalid values resolve to `allowlist`; in that mode only `TEST_RECIPIENT_ALLOWLIST` addresses reach Gmail, and an empty list permits nobody. Set exactly `production` only after controlled testing. Production recipient mode removes only the test-address restriction; all queue eligibility and safety checks remain enforced.
 
 Dashboard Quick Run lists only campaigns that pass the shared database readiness check: active lifecycle, recipients, connected sender credentials, matching templates, generated/approved previews, suppression handling, and no queue history. Quick Run shows the active per-sender batch size and calls the same scheduling and queue RPCs as the campaign page.
 

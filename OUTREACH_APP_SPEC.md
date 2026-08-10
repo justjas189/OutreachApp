@@ -547,9 +547,10 @@ TEST MODE
 
 For additional protection, support:
 
+RECIPIENT_GUARD_MODE=allowlist
 TEST_RECIPIENT_ALLOWLIST=
 
-When configured, Gmail operations must only target email addresses in that allowlist.
+Recipient guard mode defaults/fails closed to `allowlist`. In allowlist mode, Gmail operations must only target addresses in `TEST_RECIPIENT_ALLOWLIST`; an empty list permits nobody. Explicit `production` mode removes only this test-recipient restriction and must not bypass any other sending safety or eligibility check.
 
 This allows testing with my own addresses without accidentally emailing businesses.
 
@@ -866,6 +867,7 @@ TOKEN_ENCRYPTION_KEY=
 
 EMAIL_MODE=preview
 EMAIL_BATCH_SIZE=5
+RECIPIENT_GUARD_MODE=allowlist
 TEST_RECIPIENT_ALLOWLIST=
 
 APP_URL=http://localhost:3000

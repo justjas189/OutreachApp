@@ -110,6 +110,7 @@ Flow uses expiring one-time invitation tokens, hashed OAuth state, an HttpOnly S
 
 - Keep OAuth in testing until branding, test users, scopes, and verification requirements are complete.
 - Keep `EMAIL_MODE=preview` for the first Vercel deployment.
+- Keep `RECIPIENT_GUARD_MODE=allowlist`; missing or invalid values also fail closed to allowlist.
 - Before draft/live, configure `TEST_RECIPIENT_ALLOWLIST` with addresses you control.
 - Start draft testing with one fake `example.com` campaign and verify Gmail drafts are created but not sent.
 - Start live testing with `EMAIL_BATCH_SIZE=1` and one allowlisted address you control.

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseEmailBatchSize, parseEmailMode, parseTestRecipientAllowlist } from "./env";
+import {
+  parseEmailBatchSize,
+  parseEmailMode,
+  parseRecipientGuardMode,
+  parseTestRecipientAllowlist,
+} from "./env";
 
 describe("parseEmailMode", () => {
   it("defaults missing or invalid values to preview", () => {
@@ -14,6 +19,17 @@ describe("parseEmailMode", () => {
 });
 
 describe("queue environment parsing", () => {
+  it("fails closed to allowlist mode when recipient guard mode is missing or invalid", () => {
+    expect(parseRecipientGuardMode(undefined)).toBe("allowlist");
+    expect(parseRecipientGuardMode("")).toBe("allowlist");
+    expect(parseRecipientGuardMode("PRODUCTION")).toBe("allowlist");
+    expect(parseRecipientGuardMode("disabled")).toBe("allowlist");
+  });
+
+  it.each(["allowlist", "production"] as const)("accepts recipient guard mode %s", (mode) => {
+    expect(parseRecipientGuardMode(mode)).toBe(mode);
+  });
+
   it("defaults unsafe batch values to five", () => {
     expect(parseEmailBatchSize(undefined)).toBe(5);
     expect(parseEmailBatchSize("0")).toBe(5);

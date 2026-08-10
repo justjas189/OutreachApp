@@ -92,6 +92,48 @@ describe("email queue modes", () => {
     expect(repository.fail).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ code: "recipient_not_allowlisted", transient: false }));
   });
 
+  it("allowlist mode fails closed when no addresses are configured", async () => {
+    const { repository, gmail } = dependencies("live");
+    await processEmailQueue({ mode: "live", repository, gmail, recipientGuardMode: "allowlist", allowlist: null });
+    expect(gmail.sendMessage).not.toHaveBeenCalled();
+    expect(repository.fail).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.objectContaining({
+      code: "recipient_not_allowlisted",
+      transient: false,
+    }));
+  });
+
+  it("production mode does not require recipient allowlisting", async () => {
+    const { repository, gmail } = dependencies("live");
+    await processEmailQueue({ mode: "live", repository, gmail, recipientGuardMode: "production", allowlist: new Set() });
+    expect(gmail.sendMessage).toHaveBeenCalledOnce();
+    expect(repository.succeed).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "suppressed recipient",
+    "unapproved recipient or draft",
+    "ineligible sender",
+    "future schedule",
+    "paused campaign",
+    "archived campaign",
+    "deleted campaign",
+  ])("production mode still blocks final database rejection: %s", async () => {
+    const { repository, gmail } = dependencies("live");
+    repository.prepare = vi.fn(async () => null);
+    const result = await processEmailQueue({ mode: "live", repository, gmail, recipientGuardMode: "production" });
+    expect(result.skipped).toBe(1);
+    expect(gmail.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("production mode preserves duplicate-send prevention when atomic claim returns no work", async () => {
+    const { repository, gmail } = dependencies("live");
+    repository.claim = vi.fn(async () => []);
+    const result = await processEmailQueue({ mode: "live", repository, gmail, recipientGuardMode: "production" });
+    expect(result.claimed).toBe(0);
+    expect(repository.prepare).not.toHaveBeenCalled();
+    expect(gmail.sendMessage).not.toHaveBeenCalled();
+  });
+
   it("never calls Gmail when final database eligibility rejects a deleted or archived campaign", async () => {
     const { repository, gmail } = dependencies("live");
     repository.prepare = vi.fn(async () => null);

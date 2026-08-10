@@ -14,7 +14,7 @@ const modes: Array<{ mode: EmailMode; title: string; description: string }> = [
   { mode: "live", title: "Live", description: "Send approved, eligible email." },
 ];
 
-const liveConfirmation = `Enable Live Mode?\n\nApproved and eligible queued emails may be sent through connected Gmail accounts.\n\nTEST_RECIPIENT_ALLOWLIST and suppression rules will still be enforced.`;
+const liveConfirmation = `Enable Live Mode?\n\nApproved and eligible queued emails may be sent through connected Gmail accounts.\n\nDeployment recipient safety and suppression rules will still be enforced.`;
 
 export function DeliveryModeControl({ currentMode, deploymentMode }: DeliveryModeControlProps) {
   return (

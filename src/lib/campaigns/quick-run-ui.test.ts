@@ -44,8 +44,16 @@ describe("Quick Run and delivery mode UI", () => {
 
   it("uses strong Live confirmations for mode change and Quick Run", () => {
     expect(deliveryMode).toContain("Enable Live Mode?");
-    expect(deliveryMode).toContain("TEST_RECIPIENT_ALLOWLIST and suppression rules will still be enforced.");
+    expect(deliveryMode).toContain("Deployment recipient safety and suppression rules will still be enforced.");
     expect(quickRun).toContain("REAL EMAILS WILL BE SENT.");
+  });
+
+  it("shows server-authoritative recipient safety without a production-mode client control", () => {
+    expect(dashboard).toContain("Recipient Safety");
+    expect(dashboard).toContain("TEST ALLOWLIST");
+    expect(dashboard).toContain("PRODUCTION RECIPIENTS");
+    expect(dashboard).toContain("dashboard requests cannot enable production recipients");
+    expect(dashboard).not.toContain('name="recipientGuardMode"');
   });
 
   it("keeps schedule controls responsive and top-aligned", () => {

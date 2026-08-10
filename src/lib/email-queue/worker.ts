@@ -3,8 +3,10 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  getRecipientGuardMode,
   getTestRecipientAllowlist,
   type EmailMode,
+  type RecipientGuardMode,
 } from "@/lib/env";
 import { getRuntimeEmailBatchSize } from "@/lib/settings/batch-size";
 import { getRuntimeDeliveryMode } from "@/lib/settings/delivery-mode";
@@ -28,6 +30,7 @@ export type QueueRunResult = {
 type WorkerOptions = {
   mode?: EmailMode;
   batchSize?: number;
+  recipientGuardMode?: RecipientGuardMode;
   allowlist?: Set<string> | null;
   repository?: QueueRepository;
   gmail?: GmailGateway;
@@ -52,7 +55,12 @@ export async function processEmailQueue(options: WorkerOptions = {}): Promise<Qu
 
   const repository = options.repository ?? createQueueRepository();
   const gmail = options.gmail ?? gmailGateway;
-  const allowlist = options.allowlist === undefined ? getTestRecipientAllowlist() : options.allowlist;
+  const recipientGuardMode = options.recipientGuardMode ?? getRecipientGuardMode();
+  const allowlist = recipientGuardMode === "allowlist"
+    ? (options.allowlist === undefined
+        ? (getTestRecipientAllowlist() ?? new Set<string>())
+        : (options.allowlist ?? new Set<string>()))
+    : null;
   result.enqueued = await repository.enqueue(mode);
   const claimToken = randomUUID();
   const claims = await repository.claim(mode, batchSize, claimToken);
@@ -64,7 +72,7 @@ export async function processEmailQueue(options: WorkerOptions = {}): Promise<Qu
       result.skipped += 1;
       continue;
     }
-    if (allowlist && !allowlist.has(prepared.recipient_email.toLowerCase())) {
+    if (recipientGuardMode === "allowlist" && !allowlist?.has(prepared.recipient_email.toLowerCase())) {
       await repository.fail(claim.queue_id, claimToken, {
         transient: false,
         code: "recipient_not_allowlisted",
