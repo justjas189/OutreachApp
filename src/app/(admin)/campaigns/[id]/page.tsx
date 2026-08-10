@@ -3,9 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { CampaignRunControl } from "@/components/campaign-run-control";
+import { SenderAssignmentControl } from "@/components/sender-assignment-control";
 import { TimezoneSelect } from "@/components/timezone-select";
 import { decideCampaignDisposition } from "@/lib/campaigns/lifecycle";
 import { parseCampaignReadiness } from "@/lib/campaigns/readiness";
+import { parseCampaignRunReadiness } from "@/lib/campaigns/runs";
+import { getRecipientGuardMode } from "@/lib/env";
 import { getPagination } from "@/lib/pagination";
 import {
   formatForDateTimeLocal,
@@ -14,10 +18,10 @@ import {
   getSupportedTimeZones,
 } from "@/lib/scheduling/timezone";
 import { getRuntimeDeliveryModeState } from "@/lib/settings/delivery-mode";
+import { getRuntimeEmailBatchSizeState } from "@/lib/settings/batch-size";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
-  assignCampaignSendersAction,
   cancelCampaignScheduleAction,
   generateCampaignPreviewsAction,
   manageCampaignLifecycleAction,
@@ -143,6 +147,15 @@ export default async function CampaignDetailPage({
   }
 
   const campaign = campaignResult.data;
+  const recipientGuardMode = getRecipientGuardMode();
+  const [runReadinessResult, runsResult, batchSizeState] = await Promise.all([
+    supabase.rpc("get_campaign_run_readiness", { p_campaign_id: id, p_recipient_guard_mode: recipientGuardMode }),
+    supabase.from("campaign_runs").select("id,run_number,status,delivery_mode,sender_strategy,run_scope,scheduled_at,schedule_timezone,started_at,completed_at,created_at,retry_of_run_id").eq("campaign_id", id).order("run_number", { ascending: false }),
+    getRuntimeEmailBatchSizeState(),
+  ]);
+  if (runReadinessResult.error || runsResult.error) throw new Error("Campaign run history could not be loaded.");
+  const runReadiness = parseCampaignRunReadiness(runReadinessResult.data);
+  const latestRun = runsResult.data?.[0] ?? null;
   const readiness = parseCampaignReadiness(readinessResult.data);
   const archived = campaign.status === "ARCHIVED" || Boolean(campaign.archived_at);
   const createdAt = new Intl.DateTimeFormat("en-US", {
@@ -170,6 +183,9 @@ export default async function CampaignDetailPage({
     "edit-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Campaign details could not be updated. City locks after previews; all details lock after sending starts." },
     archived: { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "Campaign archived. History is preserved and no future queue work can run." },
     "lifecycle-error": { tone: "border-red-200 bg-red-50 text-red-800", message: "Campaign deletion/archive was rejected by the database lifecycle rules." },
+    "run-created": { tone: "border-[#bfd8ca] bg-[#eef8f2] text-[#1f6e4c]", message: "New campaign run created. Previous run history remains unchanged." },
+    "run-blocked": { tone: "border-red-200 bg-red-50 text-red-800", message: "Run creation was blocked by current eligibility, lifecycle, sender, or concurrency checks." },
+    "run-invalid": { tone: "border-red-200 bg-red-50 text-red-800", message: "Choose a valid sender strategy and recipient scope." },
   };
   const currentNotice = notice ? noticeMessages[notice] : undefined;
   const recipientStatusCounts = new Map<string, number>();
@@ -182,10 +198,7 @@ export default async function CampaignDetailPage({
   }
   const scheduleTimezone = campaign.schedule_timezone ?? "UTC";
   const futureSchedule = Boolean(campaign.scheduled_at && campaign.status === "READY" && !campaign.started_at);
-  const scheduleEditable = !archived
-    && !campaign.started_at
-    && (queueResult.data?.length ?? 0) === 0
-    && readiness.ready;
+  const scheduleEditable = false;
   const scheduleInputValue = campaign.scheduled_at && campaign.schedule_timezone
     ? formatForDateTimeLocal(campaign.scheduled_at, campaign.schedule_timezone)
     : "";
@@ -308,25 +321,15 @@ export default async function CampaignDetailPage({
       <section className="mt-8 grid gap-5 lg:grid-cols-2">
         <article className="panel p-6">
           <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Sender assignment</p>
-          <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Balance connected senders</h2>
+          <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Choose sender strategy</h2>
           {!assignmentEditable ? (
             <p className="mt-3 text-sm text-[#607580]">Assignment is locked after queue processing starts or when the campaign is archived.</p>
           ) : connectedSenderResult.data?.length ? (
-            <form action={assignCampaignSendersAction} className="mt-5 space-y-3">
-              <input name="campaignId" type="hidden" value={id} />
-              {connectedSenderResult.data.map((sender) => (
-                <label className="flex items-center gap-3 rounded-lg border border-[#d4ddd9] px-4 py-3 text-sm" key={sender.id}>
-                  <input
-                    defaultChecked={assignedSenderIds.size === 0 || assignedSenderIds.has(sender.id)}
-                    name="senderId"
-                    type="checkbox"
-                    value={sender.id}
-                  />
-                  <span><strong>{sender.display_name}</strong><span className="mono ml-2 text-xs text-[#607580]">{sender.email}</span></span>
-                </label>
-              ))}
-              <button className="button-primary" type="submit">Assign evenly</button>
-            </form>
+            <SenderAssignmentControl
+              campaignId={id}
+              initialSenderIds={[...assignedSenderIds]}
+              senders={connectedSenderResult.data.map((sender) => ({ id: sender.id, displayName: sender.display_name, email: sender.email }))}
+            />
           ) : (
             <p className="mt-4 text-sm text-[#607580]">No connected senders. <Link className="font-bold text-[#2563a6]" href="/senders">Create sender invite →</Link></p>
           )}
@@ -374,11 +377,50 @@ export default async function CampaignDetailPage({
         )}
       </section>
 
+      {!archived ? (
+        <section className={`panel mt-8 border-2 p-6 ${campaign.status === "FAILED" ? "border-red-300" : "border-[#bfd8ca]"}`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Campaign run</p>
+              <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">
+                {campaign.status === "FAILED" ? "Retry failed emails" : campaign.status === "COMPLETED" ? "Run campaign again" : "Start a new run"}
+              </h2>
+              <p className="mt-2 text-sm text-[#526873]">Every run freezes sender choice, approved content, delivery mode, batch size, and schedule. History never resets.</p>
+            </div>
+            {latestRun ? <span className="mono rounded-full bg-[#e5edf2] px-3 py-1 text-xs font-bold uppercase">Last: Run #{latestRun.run_number} · {latestRun.status}</span> : null}
+          </div>
+          <CampaignRunControl
+            batchSize={batchSizeState.effectiveBatchSize}
+            campaignId={id}
+            campaignName={campaign.name}
+            deliveryMode={emailMode}
+            latestRunStatus={latestRun?.status ?? null}
+            readiness={runReadiness}
+            senders={(connectedSenderResult.data ?? []).map((sender) => ({ id: sender.id, displayName: sender.display_name, email: sender.email }))}
+            timezoneOptions={timezoneOptions}
+          />
+        </section>
+      ) : null}
+
+      <section className="panel mt-8 overflow-hidden">
+        <div className="border-b border-[#d4ddd9] px-6 py-5">
+          <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Run history</p>
+          <h2 className="mt-1 text-2xl font-[780] tracking-[-0.035em]">Campaign executions</h2>
+        </div>
+        {runsResult.data?.length ? <div className="divide-y divide-[#dce4e1]">{runsResult.data.map((run) => (
+          <article className="grid gap-3 px-6 py-4 sm:grid-cols-[auto_1fr_auto] sm:items-center" key={run.id}>
+            <span className="font-extrabold">Run #{run.run_number}</span>
+            <p className="text-sm text-[#526873]">{run.sender_strategy} · {run.run_scope} · {run.delivery_mode} · {formatInTimeZone(run.scheduled_at, run.schedule_timezone)}</p>
+            <span className="mono rounded-full bg-[#eef4f7] px-3 py-1 text-xs font-bold">{run.status}</span>
+          </article>
+        ))}</div> : <p className="px-6 py-5 text-sm text-[#607580]">No campaign runs yet.</p>}
+      </section>
+
       <section className="panel mt-8 p-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Server-side schedule</p>
-            <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Queue approved emails</h2>
+            <p className="mono text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#607580]">Active run controls</p>
+            <h2 className="mt-2 text-2xl font-[780] tracking-[-0.035em]">Schedule and pause state</h2>
             {campaign.scheduled_at ? (
               <p className="mt-2 text-sm text-[#526873]">
                 {formatInTimeZone(campaign.scheduled_at, scheduleTimezone)} · {formatInTimeZone(campaign.scheduled_at, "UTC")} · timezone: <strong>{scheduleTimezone}</strong>
@@ -414,9 +456,7 @@ export default async function CampaignDetailPage({
           <p className="mt-5 text-sm text-[#607580]">
             {archived
               ? "Archived campaigns cannot be scheduled or processed."
-              : !readiness.ready
-                ? "Resolve campaign readiness blockers before saving a start time."
-                : "Schedule editing is locked because queue processing has started."}
+              : "Create schedules through the new campaign-run control above. Existing active schedules remain pausable or cancellable here."}
           </p>
         )}
 
@@ -432,7 +472,7 @@ export default async function CampaignDetailPage({
               </ConfirmSubmitButton>
             </form>
           ) : null}
-          {campaign.scheduled_at && campaign.status !== "PAUSED" && campaign.status !== "COMPLETED" ? (
+          {campaign.scheduled_at && (campaign.status === "ACTIVE" || campaign.status === "READY") ? (
             <form action={pauseCampaignAction}>
               <input name="campaignId" type="hidden" value={id} />
               <ConfirmSubmitButton

@@ -10,6 +10,7 @@ import {
   readinessAction,
   unavailableCampaignReadiness,
 } from "@/lib/campaigns/readiness";
+import { parseCampaignRunReadiness, unavailableRunReadiness } from "@/lib/campaigns/runs";
 import {
   formatTimeZoneLabel,
   getSupportedTimeZones,
@@ -47,25 +48,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   await requireAdmin();
   const query = await searchParams;
   const supabase = await createSupabaseServerClient();
-  const [campaignResult, recipientResult, connectedSenderResult, auditResult, deliveryState, batchSizeState] = await Promise.all([
+  const recipientGuardMode = getRecipientGuardMode();
+  const [campaignResult, recipientResult, connectedSenderResult, auditResult, runResult, deliveryState, batchSizeState] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id,name,city,status,scheduled_at,schedule_timezone,paused_at,archived_at")
       .neq("status", "ARCHIVED")
       .is("archived_at", null)
       .order("created_at", { ascending: false }),
-    supabase.from("recipients").select("status"),
-    supabase.from("sender_accounts").select("id", { count: "exact", head: true }).eq("status", "CONNECTED"),
+    supabase.from("recipients").select("campaign_id,status"),
+    supabase.from("sender_accounts").select("id,display_name,email,status", { count: "exact" }).eq("status", "CONNECTED").order("created_at"),
     supabase
       .from("application_setting_audit")
       .select("id,setting_name,previous_value,new_value,changed_by,changed_at")
       .order("changed_at", { ascending: false })
       .limit(8),
+    supabase.from("campaign_runs").select("campaign_id,status,run_number").order("run_number", { ascending: false }),
     getRuntimeDeliveryModeState(),
     getRuntimeEmailBatchSizeState(),
   ]);
 
-  if (campaignResult.error || recipientResult.error || connectedSenderResult.error || auditResult.error) {
+  if (campaignResult.error || recipientResult.error || connectedSenderResult.error || auditResult.error || runResult.error) {
     throw new Error("Dashboard data could not be loaded from Supabase.");
   }
 
@@ -73,6 +76,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const readinessResults = await Promise.all(
     campaigns.map((campaign) => supabase.rpc("get_campaign_readiness", { p_campaign_id: campaign.id })),
   );
+  const runReadinessResults = await Promise.all(
+    campaigns.map((campaign) => supabase.rpc("get_campaign_run_readiness", {
+      p_campaign_id: campaign.id,
+      p_recipient_guard_mode: recipientGuardMode,
+    })),
+  );
+  const latestRunByCampaign = new Map<string, string>();
+  for (const run of runResult.data ?? []) {
+    if (!latestRunByCampaign.has(run.campaign_id)) latestRunByCampaign.set(run.campaign_id, run.status);
+  }
+  const recipientCountByCampaign = new Map<string, number>();
+  for (const recipient of recipientResult.data ?? []) {
+    recipientCountByCampaign.set(recipient.campaign_id, (recipientCountByCampaign.get(recipient.campaign_id) ?? 0) + 1);
+  }
   const campaignReadiness = campaigns.map((campaign, index) => ({
     id: campaign.id,
     name: campaign.name,
@@ -83,6 +100,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       : parseCampaignReadiness(readinessResults[index]?.data),
   }));
   const readyCampaigns = campaignReadiness.filter((campaign) => campaign.readiness.ready);
+  const runnableCampaigns = campaigns.map((campaign, index) => ({
+    id: campaign.id,
+    name: campaign.name,
+    city: campaign.city,
+    status: campaign.status,
+    recipientCount: recipientCountByCampaign.get(campaign.id) ?? 0,
+    latestRunStatus: latestRunByCampaign.get(campaign.id) ?? null,
+    readiness: runReadinessResults[index]?.error
+      ? unavailableRunReadiness
+      : parseCampaignRunReadiness(runReadinessResults[index]?.data),
+  }));
   const blockedCampaigns = campaignReadiness.filter((campaign) => !campaign.readiness.ready);
   const scheduledCount = campaigns.filter((campaign) => (
     campaign.status === "READY" && campaign.scheduled_at
@@ -97,7 +125,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }));
   const notice = Array.isArray(query.notice) ? query.notice[0] : query.notice;
   const currentNotice = notice ? noticeMessages[notice] : undefined;
-  const recipientGuardMode = getRecipientGuardMode();
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -218,8 +245,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="mt-6">
           <QuickRunPanel
             batchSize={batchSizeState.effectiveBatchSize}
-            campaigns={readyCampaigns}
+            campaigns={runnableCampaigns}
             deliveryMode={deliveryState.effectiveMode}
+            senders={(connectedSenderResult.data ?? []).map((sender) => ({
+              id: sender.id,
+              displayName: sender.display_name,
+              email: sender.email,
+              status: "CONNECTED" as const,
+            }))}
             timezoneOptions={timezoneOptions}
           />
         </div>

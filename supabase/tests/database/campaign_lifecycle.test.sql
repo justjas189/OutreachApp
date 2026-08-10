@@ -55,12 +55,27 @@ insert into public.email_drafts (
   ('00000000-0000-4000-8000-000000000403', '00000000-0000-4000-8000-000000000400', '00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000010', 'Assign one', 'Safe example body', 'GENERATED', null, null),
   ('00000000-0000-4000-8000-000000000404', '00000000-0000-4000-8000-000000000400', '00000000-0000-4000-8000-000000000402', '00000000-0000-4000-8000-000000000010', 'Assign two', 'Safe example body', 'GENERATED', null, null);
 
-insert into public.email_queue (
-  id, email_draft_id, campaign_id, recipient_id, sender_account_id, delivery_mode, status, available_at, attempts, completed_at
+insert into public.campaign_runs (
+  id, campaign_id, run_number, status, delivery_mode, sender_strategy, selected_sender_ids,
+  batch_size, run_scope, scheduled_at, schedule_timezone, started_at, created_by
 ) values
-  ('00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000100', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000010', 'live', 'PENDING', now() + interval '1 day', 0, null),
-  ('00000000-0000-4000-8000-000000000203', '00000000-0000-4000-8000-000000000202', '00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000010', 'live', 'COMPLETED', now() - interval '1 hour', 1, now() - interval '30 minutes'),
-  ('00000000-0000-4000-8000-000000000206', '00000000-0000-4000-8000-000000000205', '00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000204', '00000000-0000-4000-8000-000000000010', 'live', 'PENDING', now(), 0, null);
+  ('00000000-0000-4000-8000-000000000110', '00000000-0000-4000-8000-000000000100', 1, 'SCHEDULED', 'live', 'single', array['00000000-0000-4000-8000-000000000010'::uuid], 5, 'all', now() + interval '1 day', 'UTC', null, '00000000-0000-4000-8000-000000000001'),
+  ('00000000-0000-4000-8000-000000000210', '00000000-0000-4000-8000-000000000200', 1, 'ACTIVE', 'live', 'single', array['00000000-0000-4000-8000-000000000010'::uuid], 5, 'all', now() - interval '1 hour', 'UTC', now() - interval '1 hour', '00000000-0000-4000-8000-000000000001');
+
+insert into public.campaign_run_recipients (
+  id, campaign_run_id, campaign_id, recipient_id, email_draft_id, sender_account_id,
+  recipient_email, subject, body, status, completed_at
+) values
+  ('00000000-0000-4000-8000-000000000111', '00000000-0000-4000-8000-000000000110', '00000000-0000-4000-8000-000000000100', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000010', 'delete@example.com', 'Delete', 'Safe example body', 'PENDING', null),
+  ('00000000-0000-4000-8000-000000000211', '00000000-0000-4000-8000-000000000210', '00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000202', '00000000-0000-4000-8000-000000000010', 'sent@example.com', 'Sent', 'Safe example body', 'SENT', now() - interval '30 minutes'),
+  ('00000000-0000-4000-8000-000000000212', '00000000-0000-4000-8000-000000000210', '00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000204', '00000000-0000-4000-8000-000000000205', '00000000-0000-4000-8000-000000000010', 'queued@example.com', 'Queued', 'Safe example body', 'PENDING', null);
+
+insert into public.email_queue (
+  id, email_draft_id, campaign_id, recipient_id, sender_account_id, delivery_mode, status, available_at, attempts, completed_at, campaign_run_id, campaign_run_recipient_id
+) values
+  ('00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000100', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000010', 'live', 'PENDING', now() + interval '1 day', 0, null, '00000000-0000-4000-8000-000000000110', '00000000-0000-4000-8000-000000000111'),
+  ('00000000-0000-4000-8000-000000000203', '00000000-0000-4000-8000-000000000202', '00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000010', 'live', 'COMPLETED', now() - interval '1 hour', 1, now() - interval '30 minutes', '00000000-0000-4000-8000-000000000210', '00000000-0000-4000-8000-000000000211'),
+  ('00000000-0000-4000-8000-000000000206', '00000000-0000-4000-8000-000000000205', '00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000204', '00000000-0000-4000-8000-000000000010', 'live', 'PENDING', now(), 0, null, '00000000-0000-4000-8000-000000000210', '00000000-0000-4000-8000-000000000212');
 
 insert into public.send_logs (campaign_id, recipient_id, sender_account_id, status, provider_message_id)
 values ('00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000010', 'SENT', 'safe-provider-id');
@@ -124,6 +139,13 @@ select is(
   (select schedule_timezone from public.campaigns where id = '00000000-0000-4000-8000-000000000300'),
   'UTC', 'edited schedule timezone is stored'
 );
+reset role;
+insert into public.campaign_runs (
+  id,campaign_id,run_number,status,delivery_mode,sender_strategy,selected_sender_ids,batch_size,run_scope,scheduled_at,schedule_timezone,created_by
+) select '00000000-0000-4000-8000-000000000310',id,1,'SCHEDULED','live','single',array['00000000-0000-4000-8000-000000000010'::uuid],5,'all',scheduled_at,schedule_timezone,created_by
+from public.campaigns where id='00000000-0000-4000-8000-000000000300';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000001","app_metadata":{"role":"admin"}}';
 select ok(public.cancel_campaign_schedule('00000000-0000-4000-8000-000000000300'), 'future schedule can be cancelled');
 select ok(
   (select scheduled_at is null and schedule_timezone is null from public.campaigns where id = '00000000-0000-4000-8000-000000000300'),
@@ -133,6 +155,13 @@ select is(
   public.schedule_campaign('00000000-0000-4000-8000-000000000300', now(), 'UTC')::text,
   'ACTIVE', 'send-now schedule becomes active'
 );
+reset role;
+insert into public.campaign_runs (
+  id,campaign_id,run_number,status,delivery_mode,sender_strategy,selected_sender_ids,batch_size,run_scope,scheduled_at,schedule_timezone,started_at,created_by
+) select '00000000-0000-4000-8000-000000000320',id,2,'ACTIVE','live','single',array['00000000-0000-4000-8000-000000000010'::uuid],5,'all',scheduled_at,schedule_timezone,now(),created_by
+from public.campaigns where id='00000000-0000-4000-8000-000000000300';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000001","app_metadata":{"role":"admin"}}';
 select ok(public.pause_campaign('00000000-0000-4000-8000-000000000300'), 'active campaign can be paused');
 select is(
   (select status::text from public.campaigns where id = '00000000-0000-4000-8000-000000000300'),
@@ -195,7 +224,7 @@ select throws_ok(
 );
 
 reset role;
-select is(public.enqueue_due_campaign_emails('live'), 1, 'worker enqueues only the separate active eligible campaign');
+select is(public.enqueue_due_campaign_emails('live'), 0, 'legacy campaign scheduling does not bypass explicit run creation');
 
 select * from finish();
 rollback;

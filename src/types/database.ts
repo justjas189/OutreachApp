@@ -6,7 +6,7 @@ export type CampaignRow = {
   id: string;
   name: string;
   city: string;
-  status: "DRAFT" | "READY" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+  status: "DRAFT" | "READY" | "ACTIVE" | "PAUSED" | "COMPLETED" | "FAILED" | "ARCHIVED";
   google_sheet_id: string | null;
   worksheet_name: string | null;
   created_by: string;
@@ -106,6 +106,44 @@ export type EmailQueueRow = {
   last_error_message: string | null;
   created_at: string;
   updated_at: string;
+  campaign_run_id: string;
+  campaign_run_recipient_id: string;
+};
+
+export type CampaignRunRow = {
+  id: string;
+  campaign_id: string;
+  run_number: number;
+  status: "SCHEDULED" | "ACTIVE" | "PAUSED" | "COMPLETED" | "FAILED" | "CANCELLED";
+  delivery_mode: RuntimeEmailMode;
+  sender_strategy: "single" | "balanced";
+  selected_sender_ids: string[];
+  batch_size: number;
+  run_scope: "all" | "failed";
+  retry_of_run_id: string | null;
+  scheduled_at: string;
+  schedule_timezone: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type CampaignRunRecipientRow = {
+  id: string;
+  campaign_run_id: string;
+  campaign_id: string;
+  recipient_id: string;
+  email_draft_id: string;
+  sender_account_id: string;
+  recipient_email: string;
+  subject: string;
+  body: string;
+  status: "PENDING" | "PROCESSING" | "PREVIEWED" | "DRAFTED" | "SENT" | "FAILED" | "SUPPRESSED" | "CANCELLED";
+  last_error_code: string | null;
+  last_error_message: string | null;
+  completed_at: string | null;
+  created_at: string;
 };
 
 export type SendLogRow = {
@@ -117,6 +155,8 @@ export type SendLogRow = {
   provider_message_id: string | null;
   error_message: string | null;
   created_at: string;
+  campaign_run_id: string | null;
+  email_queue_id: string | null;
 };
 
 export type ApplicationSettingsRow = {
@@ -197,6 +237,8 @@ export type Database = {
         Partial<SuppressionRow>
       >;
       email_queue: TableDefinition<EmailQueueRow, never, never>;
+      campaign_runs: TableDefinition<CampaignRunRow, never, never>;
+      campaign_run_recipients: TableDefinition<CampaignRunRecipientRow, never, never>;
       send_logs: TableDefinition<
         SendLogRow,
         Partial<SendLogRow> & Pick<SendLogRow, "campaign_id" | "recipient_id" | "status">,
@@ -372,6 +414,24 @@ export type Database = {
         Args: { p_campaign_id: string };
         Returns: Json;
       };
+      get_campaign_run_readiness: {
+        Args: { p_campaign_id: string; p_recipient_guard_mode?: "allowlist" | "production" };
+        Returns: Json;
+      };
+      create_campaign_run: {
+        Args: {
+          p_campaign_id: string;
+          p_delivery_mode: RuntimeEmailMode;
+          p_batch_size: number;
+          p_sender_strategy: CampaignRunRow["sender_strategy"];
+          p_sender_ids: string[];
+          p_run_scope: CampaignRunRow["run_scope"];
+          p_scheduled_at: string;
+          p_schedule_timezone: string;
+          p_recipient_guard_mode?: "allowlist" | "production";
+        };
+        Returns: string;
+      };
     };
     Enums: {
       campaign_status: CampaignRow["status"];
@@ -381,6 +441,10 @@ export type Database = {
       email_queue_status: EmailQueueRow["status"];
       email_delivery_mode: EmailQueueRow["delivery_mode"];
       runtime_email_mode: RuntimeEmailMode;
+      campaign_run_status: CampaignRunRow["status"];
+      sender_strategy: CampaignRunRow["sender_strategy"];
+      campaign_run_scope: CampaignRunRow["run_scope"];
+      campaign_run_recipient_status: CampaignRunRecipientRow["status"];
     };
     CompositeTypes: Record<string, never>;
   };

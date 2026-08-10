@@ -5,9 +5,14 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/admin";
+import { campaignRunFormSchema, parseCampaignRunReadiness } from "@/lib/campaigns/runs";
 import { generateRecipientPreview, normalizeBusinessType } from "@/lib/email-previews/generator";
+import { getRecipientGuardMode } from "@/lib/env";
+import { parseQuickRunFormData, resolveQuickRunSchedule } from "@/lib/scheduling/quick-run-input";
 import { resolveScheduleDate, scheduleInputSchema } from "@/lib/scheduling/schedule-input";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getRuntimeEmailBatchSize } from "@/lib/settings/batch-size";
+import { getRuntimeDeliveryMode } from "@/lib/settings/delivery-mode";
 import type { Json } from "@/types/database";
 
 const uuidSchema = z.uuid();
@@ -68,7 +73,10 @@ export async function assignCampaignSendersAction(formData: FormData) {
   await requireAdmin();
   const campaignId = uuidSchema.safeParse(formData.get("campaignId"));
   const senderIds = z.array(z.uuid()).safeParse(formData.getAll("senderId"));
-  if (!campaignId.success || !senderIds.success || senderIds.data.length === 0) {
+  const strategy = z.enum(["single", "balanced"]).safeParse(formData.get("senderStrategy"));
+  if (!campaignId.success || !senderIds.success || !strategy.success || senderIds.data.length === 0
+    || (strategy.data === "single" && senderIds.data.length !== 1)
+    || (strategy.data === "balanced" && senderIds.data.length < 2)) {
     redirect("/campaigns");
   }
 
@@ -79,6 +87,55 @@ export async function assignCampaignSendersAction(formData: FormData) {
   });
   revalidatePath(`/campaigns/${campaignId.data}`);
   redirect(campaignLocation(campaignId.data, error ? "assignment-error" : "assigned"));
+}
+
+export async function createCampaignRunAction(formData: FormData) {
+  await requireAdmin();
+  let scheduleInput;
+  try {
+    scheduleInput = parseQuickRunFormData(formData);
+  } catch {
+    redirect("/campaigns");
+  }
+  const runInput = campaignRunFormSchema.safeParse({
+    campaignId: scheduleInput.campaignId,
+    senderStrategy: formData.get("senderStrategy"),
+    senderIds: formData.getAll("senderId"),
+    runScope: formData.get("runScope"),
+  });
+  if (!runInput.success) redirect(campaignLocation(scheduleInput.campaignId, "run-invalid"));
+
+  let schedule;
+  try {
+    schedule = resolveQuickRunSchedule(scheduleInput);
+  } catch {
+    redirect(campaignLocation(scheduleInput.campaignId, "schedule-invalid"));
+  }
+  const recipientGuardMode = getRecipientGuardMode();
+  const supabase = await createSupabaseServerClient();
+  const { data: readinessData, error: readinessError } = await supabase.rpc("get_campaign_run_readiness", {
+    p_campaign_id: runInput.data.campaignId,
+    p_recipient_guard_mode: recipientGuardMode,
+  });
+  const readiness = parseCampaignRunReadiness(readinessData);
+  const allowed = runInput.data.runScope === "failed" ? readiness.canRetryFailed : readiness.canRunAll;
+  if (readinessError || !allowed) redirect(campaignLocation(runInput.data.campaignId, "run-blocked"));
+
+  const [deliveryMode, batchSize] = await Promise.all([getRuntimeDeliveryMode(), getRuntimeEmailBatchSize()]);
+  const { error } = await supabase.rpc("create_campaign_run", {
+    p_campaign_id: runInput.data.campaignId,
+    p_delivery_mode: deliveryMode,
+    p_batch_size: batchSize,
+    p_sender_strategy: runInput.data.senderStrategy,
+    p_sender_ids: runInput.data.senderIds,
+    p_run_scope: runInput.data.runScope,
+    p_scheduled_at: schedule.scheduledAt.toISOString(),
+    p_schedule_timezone: schedule.scheduleTimezone,
+    p_recipient_guard_mode: recipientGuardMode,
+  });
+  revalidatePath("/dashboard");
+  revalidatePath(`/campaigns/${runInput.data.campaignId}`);
+  redirect(campaignLocation(runInput.data.campaignId, error ? "run-blocked" : "run-created"));
 }
 
 export async function generateCampaignPreviewsAction(formData: FormData) {

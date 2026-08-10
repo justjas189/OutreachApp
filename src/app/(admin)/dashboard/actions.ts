@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/admin";
-import { parseCampaignReadiness } from "@/lib/campaigns/readiness";
-import { getEmailMode } from "@/lib/env";
+import { campaignRunFormSchema, parseCampaignRunReadiness } from "@/lib/campaigns/runs";
+import { getEmailMode, getRecipientGuardMode } from "@/lib/env";
 import {
   parseQuickRunFormData,
   QuickRunInputError,
@@ -17,6 +17,8 @@ import {
   EMAIL_BATCH_SIZE_MIN,
 } from "@/lib/settings/batch-size-shared";
 import { isModeAllowedByDeployment } from "@/lib/settings/delivery-mode";
+import { getRuntimeEmailBatchSize } from "@/lib/settings/batch-size";
+import { getRuntimeDeliveryMode } from "@/lib/settings/delivery-mode";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const modeSchema = z.enum(["preview", "draft", "live"]);
@@ -72,19 +74,40 @@ export async function quickRunCampaignAction(formData: FormData) {
     throw error;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { data: readinessData, error: readinessError } = await supabase.rpc("get_campaign_readiness", {
-    p_campaign_id: input.campaignId,
+  const runInput = campaignRunFormSchema.safeParse({
+    campaignId: input.campaignId,
+    senderStrategy: formData.get("senderStrategy"),
+    senderIds: formData.getAll("senderId"),
+    runScope: formData.get("runScope"),
   });
-  const readiness = parseCampaignReadiness(readinessData);
-  if (readinessError || !readiness.ready) {
+  if (!runInput.success) redirect(`/dashboard?notice=quick-run-sender-invalid&campaign=${input.campaignId}`);
+
+  const supabase = await createSupabaseServerClient();
+  const recipientGuardMode = getRecipientGuardMode();
+  const { data: readinessData, error: readinessError } = await supabase.rpc("get_campaign_run_readiness", {
+    p_campaign_id: input.campaignId,
+    p_recipient_guard_mode: recipientGuardMode,
+  });
+  const readiness = parseCampaignRunReadiness(readinessData);
+  const scopeReady = runInput.data.runScope === "failed" ? readiness.canRetryFailed : readiness.canRunAll;
+  if (readinessError || !scopeReady) {
     redirect(`/dashboard?notice=quick-run-blocked&campaign=${input.campaignId}`);
   }
 
-  const { error } = await supabase.rpc("schedule_campaign", {
+  const [deliveryMode, batchSize] = await Promise.all([
+    getRuntimeDeliveryMode(),
+    getRuntimeEmailBatchSize(),
+  ]);
+  const { error } = await supabase.rpc("create_campaign_run", {
     p_campaign_id: input.campaignId,
+    p_delivery_mode: deliveryMode,
+    p_batch_size: batchSize,
+    p_sender_strategy: runInput.data.senderStrategy,
+    p_sender_ids: runInput.data.senderIds,
+    p_run_scope: runInput.data.runScope,
     p_scheduled_at: schedule.scheduledAt.toISOString(),
     p_schedule_timezone: schedule.scheduleTimezone,
+    p_recipient_guard_mode: recipientGuardMode,
   });
   revalidatePath("/dashboard");
   revalidatePath(`/campaigns/${input.campaignId}`);

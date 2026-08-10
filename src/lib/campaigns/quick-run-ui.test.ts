@@ -13,8 +13,8 @@ const campaignPage = read("src/app/(admin)/campaigns/[id]/page.tsx");
 describe("Quick Run and delivery mode UI", () => {
   it("re-authorizes actions and rechecks readiness server-side", () => {
     expect(actions.match(/await requireAdmin\(\)/g)?.length).toBe(3);
-    expect(actions).toContain('supabase.rpc("get_campaign_readiness"');
-    expect(actions).toContain('supabase.rpc("schedule_campaign"');
+    expect(actions).toContain('supabase.rpc("get_campaign_run_readiness"');
+    expect(actions).toContain('supabase.rpc("create_campaign_run"');
     expect(actions).not.toContain("processEmailQueue");
     expect(actions).not.toContain("enqueue_due_campaign_emails");
   });
@@ -36,10 +36,13 @@ describe("Quick Run and delivery mode UI", () => {
     expect(dashboard).toContain("Scheduled time must be in the future.");
   });
 
-  it("only passes ready campaigns into Quick Run and explains blockers", () => {
+  it("shows ready, completed, failed, paused, and needs-attention campaigns", () => {
     expect(dashboard).toContain("campaign.readiness.ready");
     expect(dashboard).toContain("blockingReasons");
     expect(dashboard).toContain("What needs attention");
+    expect(quickRun).toContain("Needs attention");
+    expect(quickRun).toContain("latestRunStatus");
+    expect(quickRun).toContain("Open campaign");
   });
 
   it("uses strong Live confirmations for mode change and Quick Run", () => {
@@ -60,5 +63,13 @@ describe("Quick Run and delivery mode UI", () => {
     expect(campaignPage).toContain("sm:grid-cols-2");
     expect(campaignPage).toContain("xl:items-start");
     expect(campaignPage).toContain("xl:mt-[1.75rem]");
+  });
+
+  it("submits deliberate sender strategy, sender selection, and rerun scope", () => {
+    expect(quickRun).toContain('name="senderStrategy"');
+    expect(quickRun).toContain('name="senderId"');
+    expect(quickRun).toContain('name="runScope"');
+    expect(quickRun).toContain("Previous send history remains unchanged");
+    expect(quickRun).toContain("Previously SENT recipients may be included");
   });
 });

@@ -106,7 +106,7 @@ select throws_ok(
 );
 
 reset role;
-select is(public.enqueue_due_campaign_emails('live'), 1, 'ready active campaign enqueues through existing queue logic');
+select is(public.enqueue_due_campaign_emails('live'), 0, 'legacy schedule cannot enqueue without an explicit campaign run');
 select is(public.enqueue_due_campaign_emails('live'), 0, 'repeated Quick Run worker pass cannot duplicate queue work');
 select is((select count(*)::integer from public.email_queue where campaign_id = '10000000-0000-4000-8000-000000000700'), 0, 'suppression remains enforced in live mode');
 

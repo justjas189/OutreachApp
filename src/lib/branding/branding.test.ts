@@ -41,4 +41,12 @@ describe("AtlasReach branding", () => {
     expect(read("OUTREACH_APP_SPEC.md")).toContain("Rip City Review");
     expect(read("OUTREACH_APP_SPEC.md")).toContain("www.theripcityreview.com");
   });
+
+  it("ships AtlasReach AR icons through App Router metadata files", () => {
+    const icon = read("src/app/icon.svg");
+    const appleIcon = read("src/app/apple-icon.svg");
+    expect(icon).toContain('fill="#17456f"');
+    expect(icon).toContain('fill="#73b6e6"');
+    expect(appleIcon).toContain("<svg");
+  });
 });

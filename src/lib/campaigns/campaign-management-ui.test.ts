@@ -32,4 +32,12 @@ describe("campaign management UI boundaries", () => {
     expect(detailPage).toContain("action={scheduleCampaignAction}");
     expect(detailPage).toContain("TimezoneSelect");
   });
+
+  it("shows context-sensitive rerun, retry, sender strategy, and immutable run history", () => {
+    expect(detailPage).toContain("Retry failed emails");
+    expect(detailPage).toContain("Run campaign again");
+    expect(detailPage).toContain("Campaign executions");
+    expect(detailPage).toContain("SenderAssignmentControl");
+    expect(actions).toContain('supabase.rpc("create_campaign_run"');
+  });
 });

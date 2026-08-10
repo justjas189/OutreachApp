@@ -33,6 +33,7 @@ Vercel CLI enables `vercel env pull`, preview deployments, protected requests, a
 3. Create the first admin and refresh that admin's session after setting `raw_app_meta_data.role = admin`.
 4. Do not apply `supabase/seed.sql` to production.
 5. Run Supabase security/performance advisors after migrations and resolve newly introduced findings before live sending.
+6. Confirm migration `20260810104429_campaign_runs_sender_strategies.sql` applied. It backfills existing queue history into Run #1, adds RLS-protected run snapshots, and changes future queue uniqueness from one row per draft to one row per run recipient.
 
 ## 3. Configure Vercel environment variables
 
@@ -136,6 +137,9 @@ npm run test:db
 7. **Observe:** Check campaign audit history, Gmail result, suppression behavior, cron logs, and Supabase logs/advisors. Return to preview immediately if anything is unexpected.
 8. **Production-recipient confirmation:** After legal/compliance review and a successful controlled canary, require an operator to confirm: `I understand approved campaign recipients may receive email.` Then explicitly set `RECIPIENT_GUARD_MODE=production` and redeploy. This removes only the test-recipient restriction.
 9. **Expand slowly:** Increase the batch size only within provider limits. Approval, suppression, sender eligibility, schedules, lifecycle, locking, retries, delivery mode, and duplicate-send protection remain active. The app does not bypass Gmail limits.
+10. **Rerun canary:** In Draft mode, open a completed fake campaign, choose one controlled sender, select `All eligible`, accept the repeat-recipient warning, and confirm Run #2 appears while Run #1 remains unchanged. Then create a safe transient failure and verify `Failed recipients only` creates a separate retry run.
+
+Live reruns require the existing Live confirmation plus a run-specific confirmation showing previous run, recipient scope, selected sender strategy, mode, and schedule. `All eligible` can include previously SENT recipients and is never automatic. Failed-only retry excludes current suppressions, invalid recipients, disconnected/missing sender credentials, and `recipient_not_allowlisted` while recipient guard remains `allowlist`.
 
 Dashboard batch-size changes take effect on the next worker execution without a restart. Live increases of five or more require explicit confirmation and are audited with actor, previous value, new value, and timestamp.
 

@@ -350,6 +350,8 @@ Assign sender accounts.
 
 Support automatic balanced distribution.
 
+Sender assignment also supports a single connected sender or an explicitly selected subset of two or more connected senders. Only senders with usable encrypted credentials may be selected. Historical run assignments are immutable.
+
 Example:
 
 200 recipients
@@ -494,6 +496,8 @@ SENT
 or
 
 FAILED
+
+Each execution is represented by an immutable campaign run. Completed campaigns may create a new numbered run; failed recipients may create a deliberate failed-only retry run. Run snapshots preserve delivery mode, batch size, schedule/timezone, sender strategy, selected senders, recipient-approved content, queue attempts, and retry relationships. Previously SENT recipients are included in an all-recipient rerun only after explicit warning and confirmation.
 
 
 Create a campaign preview screen where the admin can inspect:
@@ -691,6 +695,8 @@ Connected
 Account 4
 sender4@gmail.com
 Disconnected
+
+Quick Run acts as a compact run control: campaign/open link, current/latest status, counts, single or selected-balanced sender strategy, Run Now/Schedule, delivery mode, batch size, failed-only retry, and confirmed all-recipient rerun.
 
 
 Campaign page should show:
