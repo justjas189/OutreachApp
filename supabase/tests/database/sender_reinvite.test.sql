@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select plan(14);
+select plan(22);
 
 insert into auth.users(id,email,raw_app_meta_data) values
 ('31000000-0000-4000-8000-000000000001','admin@example.com','{"role":"admin"}'::jsonb);
@@ -45,6 +45,33 @@ select lives_ok(
   'repeated creation request is idempotent at sender level'
 );
 select is((select count(*)::integer from public.sender_accounts where invite_creation_key='31000000-0000-4000-8000-000000000040'),1,'same request key cannot create duplicate logical senders');
+
+select lives_ok(
+  $$select public.create_or_reinvite_sender('ACCOUNT_5',repeat('f',64),now()+interval '1 day','31000000-0000-4000-8000-000000000041',null)$$,
+  'ACCOUNT_5 creates a new pending sender'
+);
+select is((select display_name from public.sender_accounts where invite_creation_key='31000000-0000-4000-8000-000000000041'),'ACCOUNT_5','ACCOUNT_5 is stored exactly');
+select lives_ok(
+  $$select public.create_or_reinvite_sender('AB',repeat('1',64),now()+interval '1 day','31000000-0000-4000-8000-000000000042',null)$$,
+  'two-character sender label passes'
+);
+select lives_ok(
+  $$select public.create_or_reinvite_sender(repeat('A',120),repeat('2',64),now()+interval '1 day','31000000-0000-4000-8000-000000000043',null)$$,
+  '120-character sender label passes'
+);
+select lives_ok(
+  $$select public.create_or_reinvite_sender('  Trim Me  ',repeat('3',64),now()+interval '1 day','31000000-0000-4000-8000-000000000044',null)$$,
+  'surrounding sender label whitespace passes after trimming'
+);
+select is((select display_name from public.sender_accounts where invite_creation_key='31000000-0000-4000-8000-000000000044'),'Trim Me','sender label whitespace is stored trimmed');
+select throws_ok(
+  $$select public.create_or_reinvite_sender('A',repeat('4',64),now()+interval '1 day','31000000-0000-4000-8000-000000000045',null)$$,
+  '22023','sender invitation input is invalid','one-character sender label fails'
+);
+select throws_ok(
+  $$select public.create_or_reinvite_sender(repeat('A',121),repeat('5',64),now()+interval '1 day','31000000-0000-4000-8000-000000000046',null)$$,
+  '22023','sender invitation input is invalid','121-character sender label fails'
+);
 
 reset role;
 select is((select count(*)::integer from public.get_sender_invite_for_connection(repeat('a',64))),0,'superseded invite URL is unusable');

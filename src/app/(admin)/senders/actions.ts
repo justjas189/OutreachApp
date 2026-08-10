@@ -9,40 +9,57 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/admin";
 import { getAppUrl } from "@/lib/env";
 import { generateSecureToken, hashToken, SENDER_INVITE_TTL_MS } from "@/lib/security/tokens";
+import { parseSenderInviteInput } from "@/lib/senders/invite-input";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { type InviteActionState, initialInviteActionState } from "./action-state";
 
 const labelSchema = z.string().trim().min(2).max(120);
 const senderIdSchema = z.uuid();
-const requestKeySchema = z.uuid();
 
 export async function createSenderInviteAction(
   _previousState: InviteActionState,
   formData: FormData,
 ): Promise<InviteActionState> {
   await requireAdmin();
-  const label = labelSchema.safeParse(formData.get("senderLabel"));
-  const requestKey = requestKeySchema.safeParse(formData.get("requestKey"));
-  const senderIdValue = formData.get("senderAccountId");
-  const senderId = senderIdValue ? senderIdSchema.safeParse(senderIdValue) : null;
-  if (!label.success || !requestKey.success || (senderId && !senderId.success)) {
-    return { ...initialInviteActionState, error: "Sender label must contain 2 to 120 characters." };
-  }
+  const input = parseSenderInviteInput(formData);
+  if (!input.success) return { ...initialInviteActionState, error: input.error };
 
   const rawToken = generateSecureToken();
   const expiresAt = new Date(Date.now() + SENDER_INVITE_TTL_MS).toISOString();
   const supabase = await createSupabaseServerClient();
+  let senderLabel: string;
+
+  if (input.data.actionType === "reinvite") {
+    const { data: sender, error: senderError } = await supabase
+      .from("sender_accounts")
+      .select("display_name,status")
+      .eq("id", input.data.senderId)
+      .maybeSingle();
+
+    if (senderError || !sender || sender.status !== "PENDING") {
+      return { ...initialInviteActionState, error: "This sender is not eligible for re-invite." };
+    }
+    senderLabel = sender.display_name;
+  } else {
+    senderLabel = input.data.senderLabel;
+  }
+
   const { error } = await supabase.rpc("create_or_reinvite_sender", {
-    p_sender_label: label.data,
+    p_sender_label: senderLabel,
     p_token_hash: hashToken(rawToken),
     p_expires_at: expiresAt,
-    p_request_key: requestKey.data,
-    p_sender_account_id: senderId?.data ?? null,
+    p_request_key: input.data.requestKey,
+    p_sender_account_id: input.data.actionType === "reinvite" ? input.data.senderId : null,
   });
 
   if (error) {
-    return { ...initialInviteActionState, error: "Sender invitation could not be created." };
+    return {
+      ...initialInviteActionState,
+      error: input.data.actionType === "reinvite"
+        ? "This sender is not eligible for re-invite."
+        : "Sender invitation could not be created.",
+    };
   }
 
   revalidatePath("/senders");

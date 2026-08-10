@@ -22,6 +22,14 @@ describe("expired pending sender deletion UI", () => {
     expect(actions).toContain('supabase.rpc("create_or_reinvite_sender"');
   });
 
+  it("submits an explicit create or re-invite contract", () => {
+    const form = readFileSync(join(process.cwd(), "src/app/(admin)/senders/invite-form.tsx"), "utf8");
+    expect(form).toContain('name="actionType"');
+    expect(form).toContain('name="senderLabel"');
+    expect(form).toContain('name="senderId"');
+    expect(actions).toContain("parseSenderInviteInput(formData)");
+  });
+
   it("keeps connected sender revocation separate", () => {
     expect(page).toContain('sender.status === "CONNECTED"');
     expect(page).toContain("revokeSenderAction");

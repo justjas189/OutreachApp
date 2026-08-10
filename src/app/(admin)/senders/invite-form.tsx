@@ -32,16 +32,18 @@ export function SenderInviteForm({ initialRequestKey, pendingSenders }: { initia
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
         <label className="text-sm font-bold">Sender
-          <select className="field mt-2" name="senderAccountId" onChange={(event) => setSenderAccountId(event.target.value)} value={senderAccountId}>
+          <select className="field mt-2" onChange={(event) => setSenderAccountId(event.target.value)} value={senderAccountId}>
             <option value="new">Create new sender</option>
             {pendingSenders.map((sender) => <option key={sender.id} value={sender.id}>Re-invite {sender.displayName}</option>)}
           </select>
         </label>
         {selectedSender ? (
-          <label className="text-sm font-bold">Sender label<input className="field mt-2 bg-[#eef4f7]" name="senderLabel" readOnly value={selectedSender.displayName} /></label>
+          <label className="text-sm font-bold">Sender label<input className="field mt-2 bg-[#eef4f7]" readOnly value={selectedSender.displayName} /></label>
         ) : (
           <label className="text-sm font-bold">Sender label<input className="field mt-2" maxLength={120} name="senderLabel" placeholder="Account 1" required /></label>
         )}
+        <input name="actionType" type="hidden" value={selectedSender ? "reinvite" : "create"} />
+        {selectedSender ? <input name="senderId" type="hidden" value={selectedSender.id} /> : null}
         <input name="requestKey" type="hidden" value={requestKey} />
         <SubmitButton pendingLabel="Creating…">Create invite</SubmitButton>
       </div>
