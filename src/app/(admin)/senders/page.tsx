@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
 
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-import { renameSenderAction, revokeSenderAction } from "./actions";
+import { deleteExpiredPendingSenderAction, renameSenderAction, revokeSenderAction } from "./actions";
 import { SenderInviteForm } from "./invite-form";
 
 export const metadata: Metadata = { title: "Sender accounts" };
 
-export default async function SendersPage() {
+type SendersPageProps = { searchParams: Promise<{ notice?: string | string[] }> };
+
+export default async function SendersPage({ searchParams }: SendersPageProps) {
+  const query = await searchParams;
+  const notice = Array.isArray(query.notice) ? query.notice[0] : query.notice;
   const supabase = await createSupabaseServerClient();
   const [{ data: senders, error: senderError }, { data: invites, error: inviteError }] =
     await Promise.all([
@@ -16,6 +21,15 @@ export default async function SendersPage() {
     ]);
 
   if (senderError || inviteError) throw new Error("Sender accounts could not be loaded.");
+  const eligibilityResults = await Promise.all(
+    (senders ?? []).map(async (sender) => {
+      const { data } = await supabase.rpc("get_pending_sender_delete_eligibility", {
+        p_sender_account_id: sender.id,
+      });
+      return [sender.id, data?.[0] ?? { eligible: false, reason: "Delete unavailable." }] as const;
+    }),
+  );
+  const deleteEligibility = new Map(eligibilityResults);
   const latestInvite = new Map<string, (typeof invites)[number]>();
   for (const invite of invites ?? []) {
     if (invite.sender_account_id && !latestInvite.has(invite.sender_account_id)) {
@@ -35,6 +49,9 @@ export default async function SendersPage() {
 
       <div className="mt-8"><SenderInviteForm /></div>
 
+      {notice === "deleted" ? <p className="mt-5 rounded-lg border border-[#bfd8ca] bg-[#eef8f2] px-4 py-3 text-sm text-[#1f6e4c]">Unused pending sender deleted.</p> : null}
+      {notice === "delete-blocked" || notice === "delete-invalid" ? <p className="mt-5 rounded-lg border border-[#f1d6a6] bg-[#fff8e8] px-4 py-3 text-sm text-[#8a5700]">Sender could not be deleted. Eligibility changed or history exists.</p> : null}
+
       <section className="mt-6 grid gap-4 lg:grid-cols-2">
         {senders?.map((sender) => {
           const invite = latestInvite.get(sender.id);
@@ -43,6 +60,7 @@ export default async function SendersPage() {
             : invite && new Date(invite.expires_at) > new Date()
               ? "Awaiting connection"
               : "Expired";
+          const deleteState = deleteEligibility.get(sender.id);
           return (
             <article className="panel p-6" key={sender.id}>
               <div className="flex items-start justify-between gap-4">
@@ -65,6 +83,17 @@ export default async function SendersPage() {
                   <form action={revokeSenderAction}>
                     <input name="senderId" type="hidden" value={sender.id} />
                     <button className="rounded-md border border-red-200 px-3 py-3 text-xs font-bold text-red-800" type="submit">Revoke</button>
+                  </form>
+                ) : null}
+                {deleteState?.eligible ? (
+                  <form action={deleteExpiredPendingSenderAction}>
+                    <input name="senderId" type="hidden" value={sender.id} />
+                    <ConfirmSubmitButton
+                      className="rounded-md border border-red-200 px-3 py-3 text-xs font-bold text-red-800 hover:bg-red-50"
+                      confirmation={`Delete pending sender?\n\n${sender.display_name} has never been connected and its latest invite is expired.\n\nThis will remove the unused sender record from the active sender list.`}
+                    >
+                      Delete
+                    </ConfirmSubmitButton>
                   </form>
                 ) : null}
               </div>

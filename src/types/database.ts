@@ -303,6 +303,14 @@ export type Database = {
         Args: { p_sender_account_id: string };
         Returns: boolean;
       };
+      get_pending_sender_delete_eligibility: {
+        Args: { p_sender_account_id: string };
+        Returns: Array<{ eligible: boolean; reason: string | null }>;
+      };
+      delete_expired_pending_sender: {
+        Args: { p_sender_account_id: string };
+        Returns: boolean;
+      };
       assign_campaign_senders: {
         Args: { p_campaign_id: string; p_sender_ids: string[] };
         Returns: number;

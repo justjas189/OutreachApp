@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth/admin";
@@ -64,4 +65,18 @@ export async function revokeSenderAction(formData: FormData) {
   await supabase.rpc("revoke_sender_connection", { p_sender_account_id: senderId.data });
   revalidatePath("/senders");
   revalidatePath("/campaigns");
+}
+
+export async function deleteExpiredPendingSenderAction(formData: FormData) {
+  await requireAdmin();
+  const senderId = senderIdSchema.safeParse(formData.get("senderId"));
+  if (!senderId.success) redirect("/senders?notice=delete-invalid");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("delete_expired_pending_sender", {
+    p_sender_account_id: senderId.data,
+  });
+
+  revalidatePath("/senders");
+  redirect(`/senders?notice=${error || !data ? "delete-blocked" : "deleted"}`);
 }
