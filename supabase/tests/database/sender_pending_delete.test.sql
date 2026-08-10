@@ -13,17 +13,18 @@ insert into public.sender_accounts(id,email,display_name,status,connected_at) va
 ('30000000-0000-4000-8000-000000000013',null,'Assigned history','PENDING',null),
 ('30000000-0000-4000-8000-000000000014',null,'Send history','PENDING',null);
 
-insert into public.sender_invites(id,expires_at,created_by,sender_label,sender_account_id) values
-('30000000-0000-4000-8000-000000000020',now()-interval '2 days','30000000-0000-4000-8000-000000000001','Expired unused','30000000-0000-4000-8000-000000000010'),
-('30000000-0000-4000-8000-000000000021',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Expired unused','30000000-0000-4000-8000-000000000010'),
-('30000000-0000-4000-8000-000000000022',now()+interval '1 day','30000000-0000-4000-8000-000000000001','Active invite','30000000-0000-4000-8000-000000000011'),
-('30000000-0000-4000-8000-000000000023',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Connected','30000000-0000-4000-8000-000000000012'),
-('30000000-0000-4000-8000-000000000024',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Assigned history','30000000-0000-4000-8000-000000000013'),
-('30000000-0000-4000-8000-000000000025',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Send history','30000000-0000-4000-8000-000000000014');
+insert into public.sender_invites(id,expires_at,created_by,sender_label,sender_account_id,invalidated_at) values
+('30000000-0000-4000-8000-000000000020',now()-interval '2 days','30000000-0000-4000-8000-000000000001','Expired unused','30000000-0000-4000-8000-000000000010',now()-interval '1 day'),
+('30000000-0000-4000-8000-000000000021',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Expired unused','30000000-0000-4000-8000-000000000010',null),
+('30000000-0000-4000-8000-000000000022',now()+interval '1 day','30000000-0000-4000-8000-000000000001','Active invite','30000000-0000-4000-8000-000000000011',null),
+('30000000-0000-4000-8000-000000000023',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Connected','30000000-0000-4000-8000-000000000012',null),
+('30000000-0000-4000-8000-000000000024',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Assigned history','30000000-0000-4000-8000-000000000013',null),
+('30000000-0000-4000-8000-000000000025',now()-interval '1 day','30000000-0000-4000-8000-000000000001','Send history','30000000-0000-4000-8000-000000000014',null);
 
 insert into private.sender_invite_tokens(sender_invite_id,token_hash) values
 ('30000000-0000-4000-8000-000000000020',repeat('a',64)),
-('30000000-0000-4000-8000-000000000021',repeat('b',64));
+('30000000-0000-4000-8000-000000000021',repeat('b',64)),
+('30000000-0000-4000-8000-000000000022',repeat('d',64));
 insert into private.sender_oauth_states(sender_invite_id,state_hash,encrypted_code_verifier,expires_at) values
 ('30000000-0000-4000-8000-000000000021',repeat('c',64),repeat('x',40),now()+interval '5 minutes');
 
@@ -42,11 +43,11 @@ select throws_ok($$select public.delete_expired_pending_sender('30000000-0000-40
 
 set local request.jwt.claims='{"sub":"30000000-0000-4000-8000-000000000001","app_metadata":{"role":"admin"}}';
 select ok((select eligible from public.get_pending_sender_delete_eligibility('30000000-0000-4000-8000-000000000010')),'expired never-connected sender is eligible');
-select isnt((select eligible from public.get_pending_sender_delete_eligibility('30000000-0000-4000-8000-000000000011')),true,'active invite sender is blocked');
+select ok((select eligible from public.get_pending_sender_delete_eligibility('30000000-0000-4000-8000-000000000011')),'active invite never-connected sender is eligible');
 select isnt((select eligible from public.get_pending_sender_delete_eligibility('30000000-0000-4000-8000-000000000012')),true,'connected sender is blocked');
 select isnt((select eligible from public.get_pending_sender_delete_eligibility('30000000-0000-4000-8000-000000000013')),true,'campaign-run sender history blocks deletion');
 select isnt((select eligible from public.get_pending_sender_delete_eligibility('30000000-0000-4000-8000-000000000014')),true,'send history blocks deletion');
-select throws_ok($$select public.delete_expired_pending_sender('30000000-0000-4000-8000-000000000011')$$,'22023','sender is not eligible for pending deletion','active invite cannot use delete RPC');
+select ok(public.delete_expired_pending_sender('30000000-0000-4000-8000-000000000011'),'active pending sender and invite are deleted transactionally');
 select throws_ok($$select public.delete_expired_pending_sender('30000000-0000-4000-8000-000000000012')$$,'22023','sender is not eligible for pending deletion','connected sender cannot use delete RPC');
 select throws_ok($$select public.delete_expired_pending_sender('30000000-0000-4000-8000-000000000013')$$,'22023','sender is not eligible for pending deletion','historical assignment cannot use delete RPC');
 select throws_ok($$select public.delete_expired_pending_sender('30000000-0000-4000-8000-000000000014')$$,'22023','sender is not eligible for pending deletion','send history cannot use delete RPC');

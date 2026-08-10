@@ -12,10 +12,9 @@ describe("expired pending sender deletion migration", () => {
     expect(migration).toContain("delete from public.sender_accounts");
   });
 
-  it("rejects connection, credentials, active invite, and used invite history", () => {
+  it("rejects connection, credentials, and used invite history", () => {
     expect(migration).toContain("v_sender.status <> 'PENDING'");
     expect(migration).toContain("v_sender.connected_at is not null");
-    expect(migration).toContain("v_latest_invite.expires_at > now()");
     expect(migration).toContain("private.sender_credentials");
     expect(migration).toContain("used_at is not null");
   });

@@ -35,6 +35,14 @@ Vercel CLI enables `vercel env pull`, preview deployments, protected requests, a
 5. Run Supabase security/performance advisors after migrations and resolve newly introduced findings before live sending.
 6. Confirm migration `20260810104429_campaign_runs_sender_strategies.sql` applied. It backfills existing queue history into Run #1, adds RLS-protected run snapshots, and changes future queue uniqueness from one row per draft to one row per run recipient.
 
+### Existing duplicate sender review
+
+Sender labels are not stable unique identities, so migrations do not merge production sender rows by matching names. After applying sender re-invitation migrations, review `/senders`:
+
+- Preserve connected or revoked rows and every row with campaign, run, queue, draft, or send history.
+- Use **Delete** only where server exposes it on a pending row. Database rechecks that sender was never connected and has no credentials or history.
+- For later attempts, select **Re-invite** for existing pending sender. Existing sender row is reused and previous unused link becomes invalid.
+
 ## 3. Configure Vercel environment variables
 
 Add every variable from `.env.example` in **Project Settings → Environment Variables**. Use distinct values for Development, Preview, and Production where appropriate. Secrets must remain server-only and must never use `NEXT_PUBLIC_`.

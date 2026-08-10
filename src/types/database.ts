@@ -42,6 +42,7 @@ export type SenderAccountRow = {
   connected_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  invite_creation_key: string | null;
 };
 
 export type SenderInviteRow = {
@@ -52,6 +53,7 @@ export type SenderInviteRow = {
   sender_label: string;
   sender_account_id: string | null;
   created_at: string;
+  invalidated_at: string | null;
 };
 
 export type TemplateRow = {
@@ -264,6 +266,16 @@ export type Database = {
           p_sender_label: string;
           p_token_hash: string;
           p_expires_at: string;
+        };
+        Returns: Array<{ sender_account_id: string; sender_invite_id: string }>;
+      };
+      create_or_reinvite_sender: {
+        Args: {
+          p_sender_label: string;
+          p_token_hash: string;
+          p_expires_at: string;
+          p_request_key: string;
+          p_sender_account_id?: string | null;
         };
         Returns: Array<{ sender_account_id: string; sender_invite_id: string }>;
       };

@@ -12,7 +12,14 @@ describe("expired pending sender deletion UI", () => {
     expect(page).toContain("deleteState?.eligible");
     expect(page).toContain("Delete pending sender?");
     expect(page).toContain("has never been connected and its latest invite is expired");
+    expect(page).toContain("Its current invitation will immediately become invalid");
     expect(page).toContain("ConfirmSubmitButton");
+  });
+
+  it("supports new logical senders and explicit re-invites without extra cards", () => {
+    expect(page).toContain("pendingSenders=");
+    expect(page).toContain('sender.status === "PENDING"');
+    expect(actions).toContain('supabase.rpc("create_or_reinvite_sender"');
   });
 
   it("keeps connected sender revocation separate", () => {

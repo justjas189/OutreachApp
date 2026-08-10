@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -13,6 +15,7 @@ import { type InviteActionState, initialInviteActionState } from "./action-state
 
 const labelSchema = z.string().trim().min(2).max(120);
 const senderIdSchema = z.uuid();
+const requestKeySchema = z.uuid();
 
 export async function createSenderInviteAction(
   _previousState: InviteActionState,
@@ -20,17 +23,22 @@ export async function createSenderInviteAction(
 ): Promise<InviteActionState> {
   await requireAdmin();
   const label = labelSchema.safeParse(formData.get("senderLabel"));
-  if (!label.success) {
+  const requestKey = requestKeySchema.safeParse(formData.get("requestKey"));
+  const senderIdValue = formData.get("senderAccountId");
+  const senderId = senderIdValue ? senderIdSchema.safeParse(senderIdValue) : null;
+  if (!label.success || !requestKey.success || (senderId && !senderId.success)) {
     return { ...initialInviteActionState, error: "Sender label must contain 2 to 120 characters." };
   }
 
   const rawToken = generateSecureToken();
   const expiresAt = new Date(Date.now() + SENDER_INVITE_TTL_MS).toISOString();
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc("create_sender_invitation", {
+  const { error } = await supabase.rpc("create_or_reinvite_sender", {
     p_sender_label: label.data,
     p_token_hash: hashToken(rawToken),
     p_expires_at: expiresAt,
+    p_request_key: requestKey.data,
+    p_sender_account_id: senderId?.data ?? null,
   });
 
   if (error) {
@@ -42,6 +50,7 @@ export async function createSenderInviteAction(
     error: null,
     inviteUrl: `${getAppUrl()}/connect/${rawToken}`,
     expiresAt,
+    nextRequestKey: randomUUID(),
   };
 }
 

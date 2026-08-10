@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { Metadata } from "next";
 
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
@@ -47,7 +49,7 @@ export default async function SendersPage({ searchParams }: SendersPageProps) {
         </p>
       </div>
 
-      <div className="mt-8"><SenderInviteForm /></div>
+      <div className="mt-8"><SenderInviteForm initialRequestKey={randomUUID()} pendingSenders={(senders ?? []).filter((sender) => sender.status === "PENDING").map((sender) => ({ id: sender.id, displayName: sender.display_name }))} /></div>
 
       {notice === "deleted" ? <p className="mt-5 rounded-lg border border-[#bfd8ca] bg-[#eef8f2] px-4 py-3 text-sm text-[#1f6e4c]">Unused pending sender deleted.</p> : null}
       {notice === "delete-blocked" || notice === "delete-invalid" ? <p className="mt-5 rounded-lg border border-[#f1d6a6] bg-[#fff8e8] px-4 py-3 text-sm text-[#8a5700]">Sender could not be deleted. Eligibility changed or history exists.</p> : null}
@@ -90,7 +92,9 @@ export default async function SendersPage({ searchParams }: SendersPageProps) {
                     <input name="senderId" type="hidden" value={sender.id} />
                     <ConfirmSubmitButton
                       className="rounded-md border border-red-200 px-3 py-3 text-xs font-bold text-red-800 hover:bg-red-50"
-                      confirmation={`Delete pending sender?\n\n${sender.display_name} has never been connected and its latest invite is expired.\n\nThis will remove the unused sender record from the active sender list.`}
+                      confirmation={inviteState === "Awaiting connection"
+                        ? `Delete pending sender?\n\n${sender.display_name} has not connected yet.\n\nIts current invitation will immediately become invalid.`
+                        : `Delete pending sender?\n\n${sender.display_name} has never been connected and its latest invite is expired.\n\nThis will remove the unused sender record from the active sender list.`}
                     >
                       Delete
                     </ConfirmSubmitButton>
