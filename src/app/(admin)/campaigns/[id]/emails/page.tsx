@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { RichTextEditor } from "@/components/rich-text-editor";
 import { getPagination } from "@/lib/pagination";
+import { plainTextToHtml, sanitizeRichHtml } from "@/lib/templates/rich-text";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
@@ -112,7 +114,12 @@ export default async function EmailReviewPage({ params, searchParams }: EmailRev
                 <input name="draftId" type="hidden" value={draft.id} />
                 <input name="campaignId" type="hidden" value={id} />
                 <label className="block text-sm font-bold">Subject<input className="field mt-2" defaultValue={draft.subject} maxLength={200} name="subject" readOnly={!editable} required /></label>
-                <label className="block text-sm font-bold">Email body<textarea className="field mono mt-2 min-h-80 text-sm leading-6" defaultValue={draft.body} maxLength={50000} name="body" readOnly={!editable} required /></label>
+                <RichTextEditor
+                  initialHtml={sanitizeRichHtml(draft.body_html ?? plainTextToHtml(draft.body))}
+                  label="Email body"
+                  name="bodyHtml"
+                  readOnly={!editable}
+                />
                 {editable ? (
                   <div className="flex flex-wrap gap-2">
                     <button className="rounded-md border border-[#c8d4d0] px-4 py-2 text-sm font-bold" formAction={saveEmailPreviewAction} type="submit">Save changes</button>

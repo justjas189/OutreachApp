@@ -10,7 +10,7 @@ export default async function TemplatesPage() {
   const supabase = await createSupabaseServerClient();
   const { data: templates, error } = await supabase
     .from("templates")
-    .select("id,business_type,guide_title,audience,services_focus,subject_template,body_template")
+    .select("id,business_type,guide_title,audience,services_focus,subject_template,body_template,body_html")
     .order("business_type");
   if (error) throw new Error("Templates could not be loaded.");
 

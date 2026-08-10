@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 
 import { SubmitButton } from "@/components/submit-button";
+import { RichTextEditor } from "@/components/rich-text-editor";
+import { plainTextToHtml } from "@/lib/templates/rich-text";
 import { TEMPLATE_VARIABLES } from "@/lib/templates/render";
 import type { TemplateRow } from "@/types/database";
 
@@ -18,6 +20,7 @@ type EditableTemplate = Pick<
   | "services_focus"
   | "subject_template"
   | "body_template"
+  | "body_html"
 >;
 
 export function TemplateForm({ template }: { template?: EditableTemplate }) {
@@ -33,7 +36,11 @@ export function TemplateForm({ template }: { template?: EditableTemplate }) {
         <label className="text-sm font-bold">Services<textarea className="field mt-2 min-h-24" defaultValue={template?.services_focus} maxLength={1000} name="servicesFocus" required /></label>
       </div>
       <label className="block text-sm font-bold">Subject template<input className="field mono mt-2 text-sm" defaultValue={template?.subject_template} maxLength={1000} name="subjectTemplate" required /></label>
-      <label className="block text-sm font-bold">Body template<textarea className="field mono mt-2 min-h-64 text-sm leading-6" defaultValue={template?.body_template} maxLength={50000} name="bodyTemplate" required /></label>
+      <RichTextEditor
+        initialHtml={template?.body_html ?? plainTextToHtml(template?.body_template ?? "")}
+        label="Body template"
+        name="bodyHtml"
+      />
       <p className="mono text-[0.67rem] leading-5 text-[#607580]">Variables: {TEMPLATE_VARIABLES.map((variable) => `{{${variable}}}`).join(" · ")}</p>
       {state.error ? <p className="text-sm font-bold text-red-800" role="alert">{state.error}</p> : null}
       {state.success ? <p className="text-sm font-bold text-[#1f6e4c]" role="status">{state.success}</p> : null}

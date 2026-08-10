@@ -21,6 +21,7 @@ function dependencies(mode: "draft" | "live") {
       sender_email: "sender@example.com",
       subject: "Approved subject",
       body: "Approved body",
+      body_html: "<p><strong>Approved</strong> body</p>",
       encrypted_refresh_token: "encrypted-not-a-real-token",
     })),
     succeed: vi.fn(async () => undefined),
@@ -76,6 +77,8 @@ describe("email queue modes", () => {
     expect(gmail.createDraft).toHaveBeenCalledOnce();
     expect(gmail.sendMessage).not.toHaveBeenCalled();
     expect(repository.succeed).toHaveBeenCalledOnce();
+    const raw = vi.mocked(gmail.createDraft).mock.calls[0][0].raw;
+    expect(Buffer.from(raw, "base64url").toString("utf8")).toContain("multipart/alternative");
   });
 
   it("live sends claimed queue work and never creates a draft", async () => {
@@ -83,6 +86,8 @@ describe("email queue modes", () => {
     await processEmailQueue({ mode: "live", repository, gmail, allowlist: new Set(["safe@example.com"]) });
     expect(gmail.sendMessage).toHaveBeenCalledOnce();
     expect(gmail.createDraft).not.toHaveBeenCalled();
+    const raw = vi.mocked(gmail.sendMessage).mock.calls[0][0].raw;
+    expect(Buffer.from(raw, "base64url").toString("utf8")).toContain("multipart/alternative");
   });
 
   it("blocks Gmail when the recipient is outside the allowlist", async () => {

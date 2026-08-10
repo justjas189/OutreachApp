@@ -1,3 +1,5 @@
+import { escapeHtml, htmlToPlainText, plainTextToHtml, sanitizeRichHtml } from "./rich-text";
+
 export const TEMPLATE_VARIABLES = [
   "NAME",
   "EMAIL",
@@ -25,6 +27,13 @@ function sanitizeValue(value: string): string {
   return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").replace(/[\r\n]+/g, " ").trim();
 }
 
+function renderHtmlTemplate(template: string, context: TemplateContext): string {
+  const unsupported = validateTemplateVariables(template);
+  if (unsupported.length > 0) throw new Error(`Unsupported template variables: ${unsupported.join(", ")}`);
+  const rendered = template.replace(variablePattern, (_match, variable: TemplateVariable) => escapeHtml(sanitizeValue(context[variable])));
+  return sanitizeRichHtml(rendered).trim();
+}
+
 export function renderTemplate(template: string, context: TemplateContext): string {
   const unsupported = validateTemplateVariables(template);
   if (unsupported.length > 0) {
@@ -38,13 +47,15 @@ export function renderEmailTemplates(
   subjectTemplate: string,
   bodyTemplate: string,
   context: TemplateContext,
-): { subject: string; body: string } {
+  bodyHtmlTemplate?: string | null,
+): { subject: string; body: string; body_html: string } {
   const subject = renderTemplate(subjectTemplate, context).replace(/\s+/g, " ").trim();
-  const body = renderTemplate(bodyTemplate, context).trim();
+  const bodyHtml = renderHtmlTemplate(bodyHtmlTemplate || plainTextToHtml(bodyTemplate), context);
+  const body = htmlToPlainText(bodyHtml);
 
   if (!subject || subject.length > 200 || !body || body.length > 50000) {
     throw new Error("Rendered email content is outside supported limits.");
   }
 
-  return { subject, body };
+  return { subject, body, body_html: bodyHtml };
 }

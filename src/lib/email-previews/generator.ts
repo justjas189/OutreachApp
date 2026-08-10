@@ -6,6 +6,7 @@ export type GeneratedPreview = {
   sender_account_id: string;
   subject: string;
   body: string;
+  body_html: string;
 };
 
 export function normalizeBusinessType(value: string): string {
@@ -15,7 +16,7 @@ export function normalizeBusinessType(value: string): string {
 export function generateRecipientPreview(
   campaign: Pick<CampaignRow, "city">,
   recipient: Pick<RecipientRow, "id" | "name" | "email" | "link" | "business_type" | "assigned_sender_id">,
-  template: Pick<TemplateRow, "guide_title" | "audience" | "services_focus" | "subject_template" | "body_template">,
+  template: Pick<TemplateRow, "guide_title" | "audience" | "services_focus" | "subject_template" | "body_template" | "body_html">,
 ): GeneratedPreview {
   if (!recipient.assigned_sender_id) throw new Error("Recipient has no assigned sender.");
   const rendered = renderEmailTemplates(template.subject_template, template.body_template, {
@@ -27,7 +28,7 @@ export function generateRecipientPreview(
     GUIDE_TITLE: template.guide_title,
     AUDIENCE: template.audience,
     SERVICES: template.services_focus,
-  });
+  }, template.body_html);
 
   return {
     recipient_id: recipient.id,

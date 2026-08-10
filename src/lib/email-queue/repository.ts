@@ -9,6 +9,7 @@ export type PreparedEmail = ClaimedQueueItem & {
   sender_email: string;
   subject: string;
   body: string;
+  body_html: string | null;
   encrypted_refresh_token: string;
 };
 

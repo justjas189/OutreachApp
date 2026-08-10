@@ -90,6 +90,7 @@ export async function processEmailQueue(options: WorkerOptions = {}): Promise<Qu
         from: prepared.sender_email,
         subject: prepared.subject,
         body: prepared.body,
+        bodyHtml: prepared.body_html,
       });
       const operation = prepared.delivery_mode === "draft" ? gmail.createDraft : gmail.sendMessage;
       gmailResult = await operation({ raw, encryptedRefreshToken: prepared.encrypted_refresh_token });

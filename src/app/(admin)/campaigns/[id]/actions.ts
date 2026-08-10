@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { campaignRunFormSchema, parseCampaignRunReadiness } from "@/lib/campaigns/runs";
 import { generateRecipientPreview, normalizeBusinessType } from "@/lib/email-previews/generator";
 import { getRecipientGuardMode } from "@/lib/env";
+import { normalizeRichTemplate } from "@/lib/templates/rich-text";
 import { parseQuickRunFormData, resolveQuickRunSchedule } from "@/lib/scheduling/quick-run-input";
 import { resolveScheduleDate, scheduleInputSchema } from "@/lib/scheduling/schedule-input";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -20,8 +21,25 @@ const emailContentSchema = z.object({
   draftId: z.uuid(),
   campaignId: z.uuid(),
   subject: z.string().trim().min(1).max(200).refine((value) => !/[\r\n]/.test(value)),
-  body: z.string().min(1).max(50000),
+  bodyHtml: z.string().min(1).max(100000),
 });
+
+function parseEmailContent(formData: FormData) {
+  const parsed = emailContentSchema.safeParse({
+    draftId: formData.get("draftId"),
+    campaignId: formData.get("campaignId"),
+    subject: formData.get("subject"),
+    bodyHtml: formData.get("bodyHtml"),
+  });
+  if (!parsed.success) return null;
+  try {
+    const body = normalizeRichTemplate(parsed.data.bodyHtml);
+    if (body.text.length > 50000) return null;
+    return { ...parsed.data, body: body.text, bodyHtml: body.html };
+  } catch {
+    return null;
+  }
+}
 const campaignDetailsSchema = z.object({
   campaignId: z.uuid(),
   name: z.string().trim().min(2).max(120),
@@ -268,42 +286,33 @@ export async function resumeCampaignAction(formData: FormData) {
 
 export async function saveEmailPreviewAction(formData: FormData) {
   await requireAdmin();
-  const parsed = emailContentSchema.safeParse({
-    draftId: formData.get("draftId"),
-    campaignId: formData.get("campaignId"),
-    subject: formData.get("subject"),
-    body: formData.get("body"),
-  });
-  if (!parsed.success) return;
+  const parsed = parseEmailContent(formData);
+  if (!parsed) return;
 
   const supabase = await createSupabaseServerClient();
   await supabase
     .from("email_drafts")
-    .update({ subject: parsed.data.subject, body: parsed.data.body })
-    .eq("id", parsed.data.draftId)
-    .eq("campaign_id", parsed.data.campaignId)
+    .update({ subject: parsed.subject, body: parsed.body, body_html: parsed.bodyHtml })
+    .eq("id", parsed.draftId)
+    .eq("campaign_id", parsed.campaignId)
     .eq("status", "GENERATED");
-  revalidatePath(`/campaigns/${parsed.data.campaignId}/emails`);
+  revalidatePath(`/campaigns/${parsed.campaignId}/emails`);
 }
 
 export async function approveEmailPreviewAction(formData: FormData) {
   await requireAdmin();
-  const parsed = emailContentSchema.safeParse({
-    draftId: formData.get("draftId"),
-    campaignId: formData.get("campaignId"),
-    subject: formData.get("subject"),
-    body: formData.get("body"),
-  });
-  if (!parsed.success) return;
+  const parsed = parseEmailContent(formData);
+  if (!parsed) return;
 
   const supabase = await createSupabaseServerClient();
   await supabase.rpc("approve_email_preview", {
-    p_email_draft_id: parsed.data.draftId,
-    p_subject: parsed.data.subject,
-    p_body: parsed.data.body,
+    p_email_draft_id: parsed.draftId,
+    p_subject: parsed.subject,
+    p_body: parsed.body,
+    p_body_html: parsed.bodyHtml,
   });
-  revalidatePath(`/campaigns/${parsed.data.campaignId}`);
-  revalidatePath(`/campaigns/${parsed.data.campaignId}/emails`);
+  revalidatePath(`/campaigns/${parsed.campaignId}`);
+  revalidatePath(`/campaigns/${parsed.campaignId}/emails`);
 }
 
 export async function approveAllEmailPreviewsAction(formData: FormData) {

@@ -41,4 +41,22 @@ describe("template rendering", () => {
     });
     expect(result.subject).toBe("Hello Rose Bcc: hidden@example.com");
   });
+
+  it("preserves formatting around variables and escapes HTML values", () => {
+    const result = renderEmailTemplates("Hello {{NAME}}", "fallback", {
+      ...context,
+      NAME: '<img src=x onerror="alert(1)"> Rose & Co',
+    }, '<p><strong>{{NAME}}</strong> <em>{{GUIDE_TITLE}}</em> <u>{{CITY}}</u></p>');
+    expect(result.body_html).toContain('<strong>&lt;img src=x onerror="alert(1)"&gt; Rose &amp; Co</strong>');
+    expect(result.body_html).toContain("<em>Best Makeup Artists</em>");
+    expect(result.body_html).toContain("<u>Portland</u>");
+    expect(result.body_html).not.toContain("<img");
+  });
+
+  it("allows safe variable links and removes unsafe rendered links", () => {
+    expect(renderEmailTemplates("Subject", "fallback", context, '<p><a href="{{LINK}}">Guide</a></p>').body_html)
+      .toContain('href="https://example.com/rose"');
+    expect(renderEmailTemplates("Subject", "fallback", { ...context, LINK: "javascript:alert(1)" }, '<p><a href="{{LINK}}">Guide</a></p>').body_html)
+      .toBe("<p><a>Guide</a></p>");
+  });
 });

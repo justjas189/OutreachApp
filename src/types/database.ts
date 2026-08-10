@@ -63,6 +63,7 @@ export type TemplateRow = {
   audience: string;
   services_focus: string;
   body_template: string;
+  body_html: string | null;
   subject_template: string;
   created_at: string;
   updated_at: string;
@@ -75,6 +76,7 @@ export type EmailDraftRow = {
   sender_account_id: string | null;
   subject: string;
   body: string;
+  body_html: string | null;
   status: "GENERATED" | "APPROVED" | "QUEUED" | "SENT" | "FAILED" | "SUPPRESSED";
   gmail_draft_id: string | null;
   created_at: string;
@@ -141,6 +143,7 @@ export type CampaignRunRecipientRow = {
   recipient_email: string;
   subject: string;
   body: string;
+  body_html: string | null;
   status: "PENDING" | "PROCESSING" | "PREVIEWED" | "DRAFTED" | "SENT" | "FAILED" | "SUPPRESSED" | "CANCELLED";
   last_error_code: string | null;
   last_error_message: string | null;
@@ -344,6 +347,7 @@ export type Database = {
           p_email_draft_id: string;
           p_subject: string;
           p_body: string;
+          p_body_html: string;
         };
         Returns: string;
       };
@@ -396,6 +400,7 @@ export type Database = {
           sender_email: string;
           subject: string;
           body: string;
+          body_html: string | null;
           encrypted_refresh_token: string;
         }>;
       };
